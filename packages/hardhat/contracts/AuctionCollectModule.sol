@@ -2,18 +2,26 @@
 
 pragma solidity 0.8.23;
 
-import {DataTypes} from 'lens-protocol/contracts/libraries/constants/Types.sol';
-import {EIP712} from '@openzeppelin/contracts/utils/cryptography/EIP712.sol';
-import {Errors} from 'lens-protocol/contracts/libraries/constants/Errors.sol';
-import {FeeModuleBase} from 'lens-protocol/contracts/modules/FeeModuleBase.sol';
-import {ICollectModule} from 'lens-protocol/contracts/modules/interfaces/ICollectModule.sol';
+import {IModuleRegistry} from "lens-modules/contracts/interfaces/IModuleRegistry.sol";
+import {Types} from 'lens-modules/contracts/libraries/constants/Types.sol';
+import {EIP712} from '@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol';
+import {Errors} from 'lens-modules/contracts/libraries/constants/Errors.sol';
+//import {FeeModuleBase} from 'lens-modules/contracts/modules/FeeModuleBase.sol';
+import {IPublicationActionModule} from "lens-modules/contracts/interfaces/IPublicationActionModule.sol";
+import {ICollectModule} from "lens-modules/contracts/modules/interfaces/ICollectModule.sol";
 import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import {IERC721} from '@openzeppelin/contracts/token/ERC721/IERC721.sol';
-import {IERC721Time} from '@aave/lens-protocol/contracts/core/base/IERC721Time.sol';
-import {ILensHub} from '@aave/lens-protocol/contracts/interfaces/ILensHub.sol';
-import {IModuleGlobals} from '@aave/lens-protocol/contracts/interfaces/IModuleGlobals.sol';
-import {ModuleBase} from '@aave/lens-protocol/contracts/core/modules/ModuleBase.sol';
+import {IERC721Timestamped} from 'lens-modules/contracts/interfaces/IERC721Timestamped.sol';
+import {ILensHub} from 'lens-modules/contracts/interfaces/ILensHub.sol';
+import {LensModule} from 'lens-modules/contracts/modules/LensModule.sol';
+import {LensModuleMetadata} from "lens-modules/contracts/modules/LensModuleMetadata.sol";
+import {LensModuleRegistrant} from "lens-modules/contracts/modules/base/LensModuleRegistrant.sol";
+import {HubRestricted} from "lens-modules/contracts/base/HubRestricted.sol";
 import {SafeERC20} from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {BaseFeeCollectModule} from "lens-modules/contracts/modules/act/collect/base/BaseFeeCollectModule.sol";
+import {IBaseFeeCollectModule, BaseFeeCollectModuleInitData} from "lens-modules/contracts/modules/interfaces/IBaseFeeCollectModule.sol";
+import {ModuleTypes} from "lens-modules/contracts/modules/libraries/constants/ModuleTypes.sol";
 
 /**
  * @notice A struct containing the necessary data to execute collect auctions.
@@ -54,6 +62,8 @@ struct AuctionData {
     bool feeProcessed;
 }
 
+error ModuleDataMismatch();
+
 /**
  * @title AuctionCollectModule
  * @author Lens Protocol
@@ -61,7 +71,12 @@ struct AuctionData {
  * @notice This module works by creating an English auction for the underlying publication. After the auction ends, only
  * the auction winner is allowed to collect the publication.
  */
-contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModule {
+contract AuctionCollectModule is
+    EIP712,
+    Ownable,
+    BaseFeeCollectModule,
+    LensModuleMetadata
+{
     using SafeERC20 for IERC20;
 
     error OngoingAuction();
@@ -93,11 +108,16 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
         uint256 endTimestamp,
         uint256 timestamp
     );
-    event FeeProcessed(uint256 indexed profileId, uint256 indexed pubId, uint256 timestamp);
+    event FeeProcessed(
+        uint256 indexed profileId,
+        uint256 indexed pubId,
+        uint256 timestamp
+    );
 
     mapping(address => uint256) public nonces;
 
-    mapping(uint256 => mapping(uint256 => AuctionData)) internal _auctionDataByPubByProfile;
+    mapping(uint256 => mapping(uint256 => AuctionData))
+        internal _auctionDataByPubByProfile;
 
     /**
      * @dev Maps a given bidder's address to its referrer profile ID. Referrer matching publication's profile ID means
@@ -107,22 +127,35 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
     mapping(uint256 => mapping(uint256 => mapping(address => uint256)))
         internal _referrerProfileIdByPubByProfile;
 
-    constructor(address hub, address moduleGlobals)
-        EIP712('AuctionCollectModule', '1')
-        ModuleBase(hub)
-        FeeModuleBase(moduleGlobals)
+    constructor(
+        address hub,
+        address actionModule,
+        address moduleRegistry
+    )
+        Ownable()
+        BaseFeeCollectModule(hub, actionModule, moduleRegistry)
+        LensModuleMetadata()
+        EIP712("AuctionCollectModule", "1")
     {}
+
+    function supportsInterface(
+        bytes4 interfaceID
+    ) public pure override(BaseFeeCollectModule, LensModule) returns (bool) {
+        return
+            BaseFeeCollectModule.supportsInterface(interfaceID) ||
+            LensModule.supportsInterface(interfaceID);
+    }
 
     /**
      * @dev See `AuctionData` struct's natspec in order to understand `data` decoded values.
      *
-     * @inheritdoc ICollectModule
+     *
      */
     function initializePublicationCollectModule(
         uint256 profileId,
         uint256 pubId,
         bytes calldata data
-    ) external override onlyHub returns (bytes memory) {
+    ) external onlyActionModule returns (bytes memory) {
         (
             uint64 availableSinceTimestamp,
             uint32 duration,
@@ -135,12 +168,22 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
             bool onlyFollowers
         ) = abi.decode(
                 data,
-                (uint64, uint32, uint32, uint256, uint256, uint16, address, address, bool)
+                (
+                    uint64,
+                    uint32,
+                    uint32,
+                    uint256,
+                    uint256,
+                    uint16,
+                    address,
+                    address,
+                    bool
+                )
             );
         if (
             duration == 0 ||
             duration < minTimeAfterBid ||
-            !_currencyWhitelisted(currency) ||
+            !MODULE_REGISTRY.isErc20CurrencyRegistered(currency) ||
             referralFee > BPS_MAX
         ) {
             revert Errors.InitParamsInvalid();
@@ -169,11 +212,10 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
      *
      * @return The auction data for the given publication.
      */
-    function getAuctionData(uint256 profileId, uint256 pubId)
-        external
-        view
-        returns (AuctionData memory)
-    {
+    function getAuctionData(
+        uint256 profileId,
+        uint256 pubId
+    ) external view returns (AuctionData memory) {
         return _auctionDataByPubByProfile[profileId][pubId];
     }
 
@@ -186,46 +228,58 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
      *  3. Publication has not been collected yet.
      * This function will also process collect fees if they have not been already processed through `processCollectFee`.
      *
-     * @inheritdoc ICollectModule
+     *
      */
     function processCollect(
         uint256 referrerProfileId,
         address collector,
         uint256 profileId,
         uint256 pubId,
-        bytes calldata data
-    ) external override onlyHub {
+        //ModuleTypes.ProcessCollectParams calldata processCollectParams
+        ModuleTypes.ProcessCollectParams calldata data
+    ) external returns (bytes memory)   {
+        //check overlap with auction checks
+        _validateAndStoreCollect(data);
+        // Override processCollect to add custom logic for processing the collect
+        // if (processCollectParams.referrerProfileIds.length == 0) {
+        //     _processCollect(processCollectParams);
+        // } else {
+        //     _processCollectWithReferral(processCollectParams);
+        // }
         if (
-            block.timestamp < _auctionDataByPubByProfile[profileId][pubId].availableSinceTimestamp
+            block.timestamp <
+            _auctionDataByPubByProfile[profileId][pubId].availableSinceTimestamp
         ) {
             revert UnavailableAuction();
         }
         if (
             _auctionDataByPubByProfile[profileId][pubId].startTimestamp == 0 ||
-            block.timestamp <= _auctionDataByPubByProfile[profileId][pubId].endTimestamp
+            block.timestamp <=
+            _auctionDataByPubByProfile[profileId][pubId].endTimestamp
         ) {
             revert OngoingAuction();
         }
         if (
-            collector != _auctionDataByPubByProfile[profileId][pubId].winner ||
-            referrerProfileId != _referrerProfileIdByPubByProfile[profileId][pubId][collector]
+           collector != _auctionDataByPubByProfile[profileId][pubId].winner ||
+            referrerProfileId !=
+            _referrerProfileIdByPubByProfile[profileId][pubId][collector]
         ) {
-            revert Errors.ModuleDataMismatch();
+            revert ModuleDataMismatch();
         }
-        if (_auctionDataByPubByProfile[profileId][pubId].collected) {
-            revert CollectAlreadyProcessed();
-        }
-        if (_auctionDataByPubByProfile[profileId][pubId].onlyFollowers) {
-            _validateFollow(
-                profileId,
-                collector,
-                abi.decode(data, (uint256)),
-                _auctionDataByPubByProfile[profileId][pubId].startTimestamp
-            );
-        } else if (data.length > 0) {
-            // Prevents `LensHub` from emiting `Collected` event with wrong `data` parameter.
-            revert Errors.ModuleDataMismatch();
-        }
+        // if (_auctionDataByPubByProfile[profileId][pubId].collected) {
+        //     revert CollectAlreadyProcessed();
+        // }
+        // if (_auctionDataByPubByProfile[profileId][pubId].onlyFollowers) {
+        //     _validateFollow(
+        //         profileId,
+        //         collector,
+        //         abi.decode(data, (uint256)),
+        //         _auctionDataByPubByProfile[profileId][pubId].startTimestamp
+        //     );
+        // } else if (data.length > 0) {
+        //     // Prevents `LensHub` from emiting `Collected` event with wrong `data` parameter.
+        //     revert ModuleDataMismatch();
+        // }
         _auctionDataByPubByProfile[profileId][pubId].collected = true;
         if (!_auctionDataByPubByProfile[profileId][pubId].feeProcessed) {
             _processCollectFee(profileId, pubId);
@@ -245,13 +299,15 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
     function processCollectFee(uint256 profileId, uint256 pubId) external {
         if (
             _auctionDataByPubByProfile[profileId][pubId].duration == 0 ||
-            block.timestamp < _auctionDataByPubByProfile[profileId][pubId].availableSinceTimestamp
+            block.timestamp <
+            _auctionDataByPubByProfile[profileId][pubId].availableSinceTimestamp
         ) {
             revert UnavailableAuction();
         }
         if (
             _auctionDataByPubByProfile[profileId][pubId].startTimestamp == 0 ||
-            block.timestamp <= _auctionDataByPubByProfile[profileId][pubId].endTimestamp
+            block.timestamp <=
+            _auctionDataByPubByProfile[profileId][pubId].endTimestamp
         ) {
             revert OngoingAuction();
         }
@@ -282,8 +338,18 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
         uint256 amount,
         uint256 followNftTokenId
     ) external {
-        (uint256 rootProfileId, uint256 rootPubId) = _getRootPublication(profileId, pubId);
-        _bid(rootProfileId, rootPubId, profileId, amount, followNftTokenId, msg.sender);
+        (uint256 rootProfileId, uint256 rootPubId) = _getRootPublication(
+            profileId,
+            pubId
+        );
+        _bid(
+            rootProfileId,
+            rootPubId,
+            profileId,
+            amount,
+            followNftTokenId,
+            msg.sender
+        );
     }
 
     /**
@@ -309,11 +375,28 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
         uint256 amount,
         uint256 followNftTokenId,
         address bidder,
-        DataTypes.EIP712Signature calldata sig
+        Types.EIP712Signature calldata sig
     ) external {
-        _validateBidSignature(profileId, pubId, amount, followNftTokenId, bidder, sig);
-        (uint256 rootProfileId, uint256 rootPubId) = _getRootPublication(profileId, pubId);
-        _bid(rootProfileId, rootPubId, profileId, amount, followNftTokenId, bidder);
+        _validateBidSignature(
+            profileId,
+            pubId,
+            amount,
+            followNftTokenId,
+            bidder,
+            sig
+        );
+        (uint256 rootProfileId, uint256 rootPubId) = _getRootPublication(
+            profileId,
+            pubId
+        );
+        _bid(
+            rootProfileId,
+            rootPubId,
+            profileId,
+            amount,
+            followNftTokenId,
+            bidder
+        );
     }
 
     /**
@@ -330,7 +413,9 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
         uint256 pubId,
         address bidder
     ) external view returns (uint256) {
-        uint256 referrerProfileId = _referrerProfileIdByPubByProfile[profileId][pubId][bidder];
+        uint256 referrerProfileId = _referrerProfileIdByPubByProfile[profileId][
+            pubId
+        ][bidder];
         return referrerProfileId == profileId ? 0 : referrerProfileId;
     }
 
@@ -366,7 +451,9 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
         address recipient,
         bool onlyFollowers
     ) internal {
-        AuctionData storage auction = _auctionDataByPubByProfile[profileId][pubId];
+        AuctionData storage auction = _auctionDataByPubByProfile[profileId][
+            pubId
+        ];
         auction.availableSinceTimestamp = availableSinceTimestamp;
         auction.duration = duration;
         auction.minTimeAfterBid = minTimeAfterBid;
@@ -402,9 +489,9 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
      */
     function _processCollectFee(uint256 profileId, uint256 pubId) internal {
         _auctionDataByPubByProfile[profileId][pubId].feeProcessed = true;
-        uint256 referrerProfileId = _referrerProfileIdByPubByProfile[profileId][pubId][
-            _auctionDataByPubByProfile[profileId][pubId].winner
-        ];
+        uint256 referrerProfileId = _referrerProfileIdByPubByProfile[profileId][
+            pubId
+        ][_auctionDataByPubByProfile[profileId][pubId].winner];
         if (referrerProfileId == profileId) {
             _processCollectFeeWithoutReferral(
                 _auctionDataByPubByProfile[profileId][pubId].winningBid,
@@ -470,7 +557,10 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
             // don't bypass the treasury fee, in essence referrals pay their fair share to the treasury.
             uint256 referralAmount = (adjustedAmount * referralFee) / BPS_MAX;
             adjustedAmount = adjustedAmount - referralAmount;
-            IERC20(currency).safeTransfer(IERC721(HUB).ownerOf(referrerProfileId), referralAmount);
+            IERC20(currency).safeTransfer(
+                IERC721(HUB).ownerOf(referrerProfileId),
+                referralAmount
+            );
         }
         IERC20(currency).safeTransfer(recipient, adjustedAmount);
         if (treasuryAmount > 0) {
@@ -497,7 +587,9 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
         uint256 followNftTokenId,
         address bidder
     ) internal {
-        AuctionData memory auction = _auctionDataByPubByProfile[profileId][pubId];
+        AuctionData memory auction = _auctionDataByPubByProfile[profileId][
+            pubId
+        ];
         _validateBid(profileId, amount, followNftTokenId, bidder, auction);
         uint256 referrerProfileIdSet = _setReferrerProfileIdIfNotAlreadySet(
             profileId,
@@ -513,9 +605,16 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
             auction
         );
         if (auction.winner != address(0)) {
-            IERC20(auction.currency).safeTransfer(auction.winner, auction.winningBid);
+            IERC20(auction.currency).safeTransfer(
+                auction.winner,
+                auction.winningBid
+            );
         }
-        IERC20(auction.currency).safeTransferFrom(bidder, address(this), amount);
+        IERC20(auction.currency).safeTransferFrom(
+            bidder,
+            address(this),
+            amount
+        );
         // `referrerProfileId` and `followNftTokenId` event params are tweaked to provide better semantics for indexers.
         emit BidPlaced(
             profileId,
@@ -548,19 +647,23 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
         if (
             auction.duration == 0 ||
             block.timestamp < auction.availableSinceTimestamp ||
-            (auction.startTimestamp > 0 && block.timestamp > auction.endTimestamp)
+            (auction.startTimestamp > 0 &&
+                block.timestamp > auction.endTimestamp)
         ) {
             revert UnavailableAuction();
         }
         _validateBidAmount(auction, amount);
-        if (auction.onlyFollowers) {
-            _validateFollow(
-                profileId,
-                bidder,
-                followNftTokenId,
-                auction.startTimestamp == 0 ? block.timestamp : auction.startTimestamp
-            );
-        }
+        //disabled for now
+        // if (auction.onlyFollowers) {
+        //     _validateFollow(
+        //         profileId,
+        //         bidder,
+        //         followNftTokenId,
+        //         auction.startTimestamp == 0
+        //             ? block.timestamp
+        //             : auction.startTimestamp
+        //     );
+        // }
     }
 
     /**
@@ -581,7 +684,9 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
         address newWinner,
         AuctionData memory prevAuctionState
     ) internal returns (uint256) {
-        AuctionData storage nextAuctionState = _auctionDataByPubByProfile[profileId][pubId];
+        AuctionData storage nextAuctionState = _auctionDataByPubByProfile[
+            profileId
+        ][pubId];
         nextAuctionState.winner = newWinner;
         nextAuctionState.winningBid = newWinningBid;
         uint256 endTimestamp = prevAuctionState.endTimestamp;
@@ -589,7 +694,9 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
             endTimestamp = block.timestamp + prevAuctionState.duration;
             nextAuctionState.endTimestamp = uint64(endTimestamp);
             nextAuctionState.startTimestamp = uint64(block.timestamp);
-        } else if (endTimestamp - block.timestamp < prevAuctionState.minTimeAfterBid) {
+        } else if (
+            endTimestamp - block.timestamp < prevAuctionState.minTimeAfterBid
+        ) {
             endTimestamp = block.timestamp + prevAuctionState.minTimeAfterBid;
             nextAuctionState.endTimestamp = uint64(endTimestamp);
         }
@@ -613,9 +720,13 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
         uint256 referrerProfileId,
         address bidder
     ) internal returns (uint256) {
-        uint256 referrerProfileIdSet = _referrerProfileIdByPubByProfile[profileId][pubId][bidder];
+        uint256 referrerProfileIdSet = _referrerProfileIdByPubByProfile[
+            profileId
+        ][pubId][bidder];
         if (referrerProfileIdSet == 0) {
-            _referrerProfileIdByPubByProfile[profileId][pubId][bidder] = referrerProfileId;
+            _referrerProfileIdByPubByProfile[profileId][pubId][
+                bidder
+            ] = referrerProfileId;
             referrerProfileIdSet = referrerProfileId;
         }
         return referrerProfileIdSet;
@@ -627,7 +738,10 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
      * @param auction The auction where the bid amount validation should be performed.
      * @param amount The bid amount to validate.
      */
-    function _validateBidAmount(AuctionData memory auction, uint256 amount) internal pure {
+    function _validateBidAmount(
+        AuctionData memory auction,
+        uint256 amount
+    ) internal pure {
         bool auctionStartsWithCurrentBid = auction.winner == address(0);
         if (
             (auctionStartsWithCurrentBid && amount < auction.reservePrice) ||
@@ -650,21 +764,26 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
      * @param maxValidFollowTimestamp The maximum timestamp for which Follow NFTs should have been minted before to be
      * valid for this scenario.
      */
-    function _validateFollow(
-        uint256 profileId,
-        address follower,
-        uint256 followNftTokenId,
-        uint256 maxValidFollowTimestamp
-    ) internal view {
-        address followNFT = ILensHub(HUB).getFollowNFT(profileId);
-        if (
-            followNFT == address(0) ||
-            IERC721(followNFT).ownerOf(followNftTokenId) != follower ||
-            IERC721Time(followNFT).mintTimestampOf(followNftTokenId) > maxValidFollowTimestamp
-        ) {
-            revert Errors.FollowInvalid();
-        }
-    }
+    // function _validateFollow(
+    //     uint256 profileId,
+    //     address follower,
+    //     uint256 followNftTokenId,
+    //     uint256 maxValidFollowTimestamp
+    // ) internal view {
+        
+
+
+    //     //address followNFT = ILensHub(HUB).getFollowNFT(profileId);
+    //     if (
+    //         //ILensHub(HUB).isFollowing(profileId, follower)
+    //         // followNFT == address(0) ||
+    //         // IERC721(followNFT).ownerOf(followNftTokenId) != follower ||
+    //         // IERC721Timestamped(followNFT).mintTimestampOf(followNftTokenId) >
+    //         // maxValidFollowTimestamp
+    //     ) {
+    //         revert Errors.FollowInvalid();
+    //     }
+    // }
 
     /**
      * @notice Returns the pointed publication if the passed one is a mirror, otherwise just returns the passed one.
@@ -672,19 +791,21 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
      * @param profileId The token ID of the profile associated with the publication, could be a mirror.
      * @param pubId The publication ID associated with the publication, could be a mirror.
      */
-    function _getRootPublication(uint256 profileId, uint256 pubId)
-        internal
-        view
-        returns (uint256, uint256)
-    {
-        DataTypes.PublicationStruct memory publication = ILensHub(HUB).getPub(profileId, pubId);
-        if (publication.collectModule != address(0)) {
-            return (profileId, pubId);
+    function _getRootPublication(
+        uint256 profileId,
+        uint256 pubId
+    ) internal view returns (uint256, uint256) {
+        Types.PublicationMemory memory publication = ILensHub(HUB).getPublication(
+            profileId,
+            pubId
+        );
+        if (publication.referenceModule != address(0)) {
+            return (publication.rootProfileId, publication.rootPubId);
         } else {
-            if (publication.profileIdPointed == 0) {
+            if (publication.pointedProfileId == 0) {
                 revert Errors.PublicationDoesNotExist();
             }
-            return (publication.profileIdPointed, publication.pubIdPointed);
+            return (publication.pointedProfileId, publication.pointedPubId);
         }
     }
 
@@ -704,14 +825,14 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
         uint256 amount,
         uint256 followNftTokenId,
         address bidder,
-        DataTypes.EIP712Signature calldata sig
+        Types.EIP712Signature calldata sig
     ) internal {
         unchecked {
             _validateRecoveredAddress(
                 _calculateDigest(
                     abi.encode(
                         keccak256(
-                            'BidWithSig(uint256 profileId,uint256 pubId,uint256 amount,uint256 followNftTokenId,uint256 nonce,uint256 deadline)'
+                            "BidWithSig(uint256 profileId,uint256 pubId,uint256 amount,uint256 followNftTokenId,uint256 nonce,uint256 deadline)"
                         ),
                         profileId,
                         pubId,
@@ -737,13 +858,16 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
     function _validateRecoveredAddress(
         bytes32 digest,
         address expectedAddress,
-        DataTypes.EIP712Signature calldata sig
+        Types.EIP712Signature calldata sig
     ) internal view {
         if (sig.deadline < block.timestamp) {
             revert Errors.SignatureExpired();
         }
         address recoveredAddress = ecrecover(digest, sig.v, sig.r, sig.s);
-        if (recoveredAddress == address(0) || recoveredAddress != expectedAddress) {
+        if (
+            recoveredAddress == address(0) ||
+            recoveredAddress != expectedAddress
+        ) {
             revert Errors.SignatureInvalid();
         }
     }
@@ -753,7 +877,33 @@ contract AuctionCollectModule is EIP712, FeeModuleBase, ModuleBase, ICollectModu
      *
      * @param message The message, as bytes, to calculate the digest from.
      */
-    function _calculateDigest(bytes memory message) internal view returns (bytes32) {
-        return keccak256(abi.encodePacked('\x19\x01', _domainSeparatorV4(), keccak256(message)));
+    function _calculateDigest(
+        bytes memory message
+    ) internal view returns (bytes32) {
+        return keccak256(
+                            abi.encodePacked(
+                    "\x19\x01",
+                    EIP712._domainSeparatorV4(),
+                    keccak256(message)
+                )
+            );
     }
-}
+
+    /// @inheritdoc ICollectModule
+    function initializePublicationCollectModule(
+        uint256 profileId,
+        uint256 pubId,
+        address transactionExecutor,
+        bytes calldata data
+    ) external override returns (bytes memory) {}
+
+    // function supportsInterface(
+    //     bytes4 interfaceID
+    // )
+    //     public
+    //     pure
+    //     virtual
+    //     override(BaseFeeCollectModule, LensModule)
+    //     returns (bool)
+    // {}
+} 
