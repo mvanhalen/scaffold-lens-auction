@@ -36,13 +36,13 @@ const config: HardhatUserConfig = {
       },
     },
   },
-  dependencyCompiler: {
-    paths: [
-      "lens-modules/contracts/misc/ModuleRegistry.sol",
-      "lens-modules/contracts/modules/act/collect/CollectPublicationAction.sol",
-      "lens-modules/contracts/modules/act/collect/CollectNFT.sol",
-    ],
-  },
+  // dependencyCompiler: {
+  //   paths: [
+  //     "lens-modules/contracts/misc/ModuleRegistry.sol",
+  //     "lens-modules/contracts/modules/act/collect/CollectPublicationAction.sol",
+  //     "lens-modules/contracts/modules/act/collect/CollectNFT.sol",
+  //   ],
+  // },
   defaultNetwork: "localhost",
   namedAccounts: {
     deployer: {
