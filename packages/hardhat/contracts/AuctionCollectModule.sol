@@ -22,6 +22,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {BaseFeeCollectModule} from "lens-modules/contracts/modules/act/collect/base/BaseFeeCollectModule.sol";
 import {IBaseFeeCollectModule, BaseFeeCollectModuleInitData} from "lens-modules/contracts/modules/interfaces/IBaseFeeCollectModule.sol";
 import {ModuleTypes} from "lens-modules/contracts/modules/libraries/constants/ModuleTypes.sol";
+import {FollowValidationLib} from "lens-modules/contracts/modules/libraries/FollowValidationLib.sol";
 
 /**
  * @notice A struct containing the necessary data to execute collect auctions.
@@ -103,8 +104,8 @@ contract AuctionCollectModule is
         uint256 indexed pubId,
         uint256 referrerProfileId,
         uint256 amount,
-        uint256 followNftTokenId,
         address bidder,
+        uint256 bidderProfileId,
         uint256 endTimestamp,
         uint256 timestamp
     );
@@ -235,17 +236,19 @@ contract AuctionCollectModule is
         address collector,
         uint256 profileId,
         uint256 pubId,
-        //ModuleTypes.ProcessCollectParams calldata processCollectParams
-        ModuleTypes.ProcessCollectParams calldata data
+        ModuleTypes.ProcessCollectParams calldata processCollectParams
+        //ModuleTypes.ProcessCollectParams calldata data
     ) external returns (bytes memory)   {
-        //check overlap with auction checks
-        _validateAndStoreCollect(data);
+        //checks basic collect settings, like follower only and end date
+        _validateAndStoreCollect(processCollectParams);
+
         // Override processCollect to add custom logic for processing the collect
-        // if (processCollectParams.referrerProfileIds.length == 0) {
-        //     _processCollect(processCollectParams);
-        // } else {
-        //     _processCollectWithReferral(processCollectParams);
-        // }
+        if (processCollectParams.referrerProfileIds.length == 0) {
+            _processCollect(processCollectParams);
+        } else {
+            _processCollectWithReferral(processCollectParams);
+        }
+    
         if (
             block.timestamp <
             _auctionDataByPubByProfile[profileId][pubId].availableSinceTimestamp
@@ -260,26 +263,16 @@ contract AuctionCollectModule is
             revert OngoingAuction();
         }
         if (
-           collector != _auctionDataByPubByProfile[profileId][pubId].winner ||
+            collector != _auctionDataByPubByProfile[profileId][pubId].winner ||
             referrerProfileId !=
             _referrerProfileIdByPubByProfile[profileId][pubId][collector]
         ) {
             revert ModuleDataMismatch();
         }
-        // if (_auctionDataByPubByProfile[profileId][pubId].collected) {
-        //     revert CollectAlreadyProcessed();
-        // }
-        // if (_auctionDataByPubByProfile[profileId][pubId].onlyFollowers) {
-        //     _validateFollow(
-        //         profileId,
-        //         collector,
-        //         abi.decode(data, (uint256)),
-        //         _auctionDataByPubByProfile[profileId][pubId].startTimestamp
-        //     );
-        // } else if (data.length > 0) {
-        //     // Prevents `LensHub` from emiting `Collected` event with wrong `data` parameter.
-        //     revert ModuleDataMismatch();
-        // }
+        if (_auctionDataByPubByProfile[profileId][pubId].collected) {
+            revert CollectAlreadyProcessed();
+        }
+
         _auctionDataByPubByProfile[profileId][pubId].collected = true;
         if (!_auctionDataByPubByProfile[profileId][pubId].feeProcessed) {
             _processCollectFee(profileId, pubId);
@@ -330,13 +323,13 @@ contract AuctionCollectModule is
      * @param profileId The token ID of the profile associated with the publication, could be a mirror.
      * @param pubId The publication ID associated with the publication, could be a mirror.
      * @param amount The bid amount to offer.
-     * @param followNftTokenId The token ID of the Follow NFT to use if the auction is configured as followers-only.
+     * @param bidderProfileId The token ID of the bidder profile.
      */
     function bid(
         uint256 profileId,
         uint256 pubId,
         uint256 amount,
-        uint256 followNftTokenId
+        uint256 bidderProfileId
     ) external {
         (uint256 rootProfileId, uint256 rootPubId) = _getRootPublication(
             profileId,
@@ -347,8 +340,8 @@ contract AuctionCollectModule is
             rootPubId,
             profileId,
             amount,
-            followNftTokenId,
-            msg.sender
+            msg.sender,
+            bidderProfileId
         );
     }
 
@@ -365,24 +358,24 @@ contract AuctionCollectModule is
      * @param profileId The token ID of the profile associated with the publication, could be a mirror.
      * @param pubId The publication ID associated with the publication, could be a mirror.
      * @param amount The bid amount to offer.
-     * @param followNftTokenId The token ID of the Follow NFT to use if the auction is configured as followers-only.
      * @param bidder The address of the bidder.
+     * @param bidderProfileId The ProfileId of the bidder.
      * @param sig The EIP-712 signature for this operation.
      */
     function bidWithSig(
         uint256 profileId,
         uint256 pubId,
         uint256 amount,
-        uint256 followNftTokenId,
         address bidder,
+        uint256 bidderProfileId,
         Types.EIP712Signature calldata sig
     ) external {
         _validateBidSignature(
             profileId,
             pubId,
             amount,
-            followNftTokenId,
             bidder,
+            bidderProfileId,
             sig
         );
         (uint256 rootProfileId, uint256 rootPubId) = _getRootPublication(
@@ -394,8 +387,8 @@ contract AuctionCollectModule is
             rootPubId,
             profileId,
             amount,
-            followNftTokenId,
-            bidder
+            bidder,
+            bidderProfileId
         );
     }
 
@@ -576,21 +569,21 @@ contract AuctionCollectModule is
      * @param pubId The publication ID associated with the underlying publication.
      * @param referrerProfileId The token ID of the referrer's profile.
      * @param amount The bid amount to offer.
-     * @param followNftTokenId The token ID of the Follow NFT to use if the auction is configured as followers-only.
      * @param bidder The address of the bidder.
+     * @param bidderProfileId The token ID of the bidder profile
      */
     function _bid(
         uint256 profileId,
         uint256 pubId,
         uint256 referrerProfileId,
         uint256 amount,
-        uint256 followNftTokenId,
-        address bidder
+        address bidder,
+        uint256 bidderProfileId
     ) internal {
         AuctionData memory auction = _auctionDataByPubByProfile[profileId][
             pubId
         ];
-        _validateBid(profileId, amount, followNftTokenId, bidder, auction);
+        _validateBid(profileId, amount, bidder,bidderProfileId, auction);
         uint256 referrerProfileIdSet = _setReferrerProfileIdIfNotAlreadySet(
             profileId,
             pubId,
@@ -621,8 +614,8 @@ contract AuctionCollectModule is
             pubId,
             referrerProfileIdSet == profileId ? 0 : referrerProfileIdSet,
             amount,
-            auction.onlyFollowers ? followNftTokenId : 0,
             bidder,
+            bidderProfileId,
             endTimestamp,
             block.timestamp
         );
@@ -633,15 +626,15 @@ contract AuctionCollectModule is
      *
      * @param profileId The token ID of the profile associated with the underlying publication.
      * @param amount The bid amount to offer.
-     * @param followNftTokenId The token ID of the Follow NFT to use if the auction is configured as followers-only.
      * @param bidder The address of the bidder.
+     * @param bidderProfileId The token ID of the bidder profile.
      * @param auction The data of the auction where the bid is being placed.
      */
     function _validateBid(
         uint256 profileId,
         uint256 amount,
-        uint256 followNftTokenId,
         address bidder,
+        uint256 bidderProfileId,
         AuctionData memory auction
     ) internal view {
         if (
@@ -654,16 +647,12 @@ contract AuctionCollectModule is
         }
         _validateBidAmount(auction, amount);
         //disabled for now
-        // if (auction.onlyFollowers) {
-        //     _validateFollow(
-        //         profileId,
-        //         bidder,
-        //         followNftTokenId,
-        //         auction.startTimestamp == 0
-        //             ? block.timestamp
-        //             : auction.startTimestamp
-        //     );
-        // }
+        if (auction.onlyFollowers) {
+            _validateFollow(
+                profileId,
+                bidderProfileId
+            );
+        }
     }
 
     /**
@@ -759,31 +748,30 @@ contract AuctionCollectModule is
      * follow NFT collection and was minted before the given deadline.
      *
      * @param profileId The token ID of the profile associated with the publication.
-     * @param follower The address performing the follow operation.
-     * @param followNftTokenId The token ID of the Follow NFT to use.
-     * @param maxValidFollowTimestamp The maximum timestamp for which Follow NFTs should have been minted before to be
+     * @param followerId The profileId performing the follow operation.
      * valid for this scenario.
      */
-    // function _validateFollow(
-    //     uint256 profileId,
-    //     address follower,
-    //     uint256 followNftTokenId,
-    //     uint256 maxValidFollowTimestamp
-    // ) internal view {
+    function _validateFollow(
+        uint256 profileId,
+        uint256 followerId
+    ) internal view {
         
-
-
-    //     //address followNFT = ILensHub(HUB).getFollowNFT(profileId);
-    //     if (
-    //         //ILensHub(HUB).isFollowing(profileId, follower)
-    //         // followNFT == address(0) ||
-    //         // IERC721(followNFT).ownerOf(followNftTokenId) != follower ||
-    //         // IERC721Timestamped(followNFT).mintTimestampOf(followNftTokenId) >
-    //         // maxValidFollowTimestamp
-    //     ) {
-    //         revert Errors.FollowInvalid();
-    //     }
-    // }
+        FollowValidationLib.validateIsFollowingOrSelf(
+            HUB,
+            followerId,
+            profileId
+        );
+        //address followNFT = ILensHub(HUB).getFollowNFT(profileId);
+        //if (
+            //ILensHub(HUB).isFollowing(profileId, follower)
+            // followNFT == address(0) ||
+            // IERC721(followNFT).ownerOf(followNftTokenId) != follower ||
+            // IERC721Timestamped(followNFT).mintTimestampOf(followNftTokenId) >
+            // maxValidFollowTimestamp
+        // ) {
+        //     revert Errors.FollowInvalid();
+        // }
+    }
 
     /**
      * @notice Returns the pointed publication if the passed one is a mirror, otherwise just returns the passed one.
@@ -815,16 +803,16 @@ contract AuctionCollectModule is
      * @param profileId The token ID of the profile associated with the publication, could be a mirror.
      * @param pubId The publication ID associated with the publication, could be a mirror.
      * @param amount The bid amount to offer.
-     * @param followNftTokenId The token ID of the Follow NFT to use if the auction is configured as followers-only.
      * @param bidder The address of the bidder.
+     * @param bidderProfileId The token ID of the bidder profile
      * @param sig The EIP-712 signature to validate.
      */
     function _validateBidSignature(
         uint256 profileId,
         uint256 pubId,
         uint256 amount,
-        uint256 followNftTokenId,
         address bidder,
+        uint256 bidderProfileId,
         Types.EIP712Signature calldata sig
     ) internal {
         unchecked {
@@ -832,13 +820,13 @@ contract AuctionCollectModule is
                 _calculateDigest(
                     abi.encode(
                         keccak256(
-                            "BidWithSig(uint256 profileId,uint256 pubId,uint256 amount,uint256 followNftTokenId,uint256 nonce,uint256 deadline)"
+                            "BidWithSig(uint256 profileId,uint256 pubId,uint256 amount,uint256 nonce,uint256 bidderProfileId,uint256 deadline)"
                         ),
                         profileId,
                         pubId,
                         amount,
-                        followNftTokenId,
                         nonces[bidder]++,
+                        bidderProfileId,
                         sig.deadline
                     )
                 ),
