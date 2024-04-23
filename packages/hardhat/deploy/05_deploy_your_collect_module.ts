@@ -4,17 +4,17 @@ import { YourCollectModule } from "../typechain-types";
 import { ethers } from "hardhat";
 import { module } from "@lens-protocol/metadata";
 import { uploadMetadata } from "../lib/irys-service";
-import { COLLECT_PUBLICATION_ACTION, LENS_HUB, MODULE_REGISTRY } from "../config";
+import { COLLECT_PUBLICATION_ACTION, LENS_HUB } from "../config";
 
 /**
  * Generates the metadata for the YourCollectModule contract compliant with the Module Metadata Standard at:
  * https://docs.lens.xyz/docs/module-metadata-standard
  */
 const metadata = module({
-  name: "YourCollectModule",
-  title: "Your Collect Action",
-  description: "Description of your collect action",
-  authors: ["some@email.com"],
+  name: "AuctionCollectModule",
+  title: "Auction Collect Module",
+  description: "This module enables an auction-style collectible sale.",
+  authors: ["mvanhalen@gmail.com"],
   initializeCalldataABI: JSON.stringify([]),
   processCalldataABI: JSON.stringify([]),
   attributes: [],
@@ -46,16 +46,16 @@ const deployYourCollectModuleContract: DeployFunction = async function (hre: Har
 
   // First check to see if there's a local mocked ModuleRegistry contract deployed
   // This allows us to run tests locally with the same flow as on-chain
-  let moduleRegistry: string | undefined;
-  try {
-    const { address } = await get("ModuleRegistry");
-    moduleRegistry = address;
-  } catch (e) {}
+  // let moduleRegistry: string | undefined;
+  // try {
+  //   const { address } = await get("ModuleRegistry");
+  //   moduleRegistry = address;
+  // } catch (e) {}
 
-  // If there's no local mocked ModuleRegistry, use the live address from the environment
-  if (!moduleRegistry) {
-    moduleRegistry = MODULE_REGISTRY;
-  }
+  // // If there's no local mocked ModuleRegistry, use the live address from the environment
+  // if (!moduleRegistry) {
+  //   moduleRegistry = MODULE_REGISTRY;
+  // }
 
   // Next, check to see if there's a local mocked CollectPublicationAction contract deployed
   // This allows us to run tests locally with the same flow as on-chain
@@ -70,8 +70,8 @@ const deployYourCollectModuleContract: DeployFunction = async function (hre: Har
     collectPublicationAction = COLLECT_PUBLICATION_ACTION;
   }
 
-  // Deploy the YourCollectModule contract
-  await deploy("YourCollectModule", {
+  // Deploy the AuctionCollectMode contract
+  await deploy("AuctionCollectMode", {
     from: deployer,
     args: [lensHubAddress, collectPublicationAction, moduleRegistry],
     log: true,
@@ -81,7 +81,7 @@ const deployYourCollectModuleContract: DeployFunction = async function (hre: Har
   });
 
   // Get the deployed contract
-  const yourCollectModule = await hre.ethers.getContract<YourCollectModule>("YourCollectModule", deployer);
+  const yourCollectModule = await hre.ethers.getContract<YourCollectModule>("AuctionCollectMode", deployer);
 
   // Upload the metadata to Arweave with Irys and set the URI on the contract
   const metadataURI = await uploadMetadata(metadata);
@@ -100,4 +100,4 @@ export default deployYourCollectModuleContract;
 
 // Tags are useful if you have multiple deploy files and only want to run one of them.
 // e.g. yarn deploy --tags YourCollectModule
-deployYourCollectModuleContract.tags = ["YourCollectModule"];
+deployYourCollectModuleContract.tags = ["AuctionCollectMode"];

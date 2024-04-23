@@ -8,21 +8,19 @@ import {EIP712} from '@openzeppelin/contracts/utils/cryptography/draft-EIP712.so
 import {Errors} from 'lens-modules/contracts/libraries/constants/Errors.sol';
 //import {FeeModuleBase} from 'lens-modules/contracts/modules/FeeModuleBase.sol';
 import {IPublicationActionModule} from "lens-modules/contracts/interfaces/IPublicationActionModule.sol";
-import {ICollectModule} from "lens-modules/contracts/modules/interfaces/ICollectModule.sol";
 import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import {IERC721} from '@openzeppelin/contracts/token/ERC721/IERC721.sol';
 import {IERC721Timestamped} from 'lens-modules/contracts/interfaces/IERC721Timestamped.sol';
 import {ILensHub} from 'lens-modules/contracts/interfaces/ILensHub.sol';
 import {LensModule} from 'lens-modules/contracts/modules/LensModule.sol';
-import {LensModuleMetadata} from "lens-modules/contracts/modules/LensModuleMetadata.sol";
+import {LensModuleMetadata} from 'lens-modules/contracts/modules/LensModuleMetadata.sol';
 import {LensModuleRegistrant} from "lens-modules/contracts/modules/base/LensModuleRegistrant.sol";
 import {HubRestricted} from "lens-modules/contracts/base/HubRestricted.sol";
 import {SafeERC20} from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {BaseFeeCollectModule} from "lens-modules/contracts/modules/act/collect/base/BaseFeeCollectModule.sol";
-import {IBaseFeeCollectModule, BaseFeeCollectModuleInitData} from "lens-modules/contracts/modules/interfaces/IBaseFeeCollectModule.sol";
 import {ModuleTypes} from "lens-modules/contracts/modules/libraries/constants/ModuleTypes.sol";
 import {FollowValidationLib} from "lens-modules/contracts/modules/libraries/FollowValidationLib.sol";
+import {BaseFeeCollectModule} from "lens-modules/contracts/modules/act/collect/base/BaseFeeCollectModule.sol";
 
 /**
  * @notice A struct containing the necessary data to execute collect auctions.
@@ -66,25 +64,40 @@ struct AuctionData {
 error ModuleDataMismatch();
 
 /**
- * @title AuctionCollectModule
- * @author Lens Protocol
+ * @title AuctionCollectActionModule
+ * @author Lens Protocol, Martijn van Halen and Paul Burke
  *
  * @notice This module works by creating an English auction for the underlying publication. After the auction ends, only
  * the auction winner is allowed to collect the publication.
  */
 contract AuctionCollectModule is
     EIP712,
-    Ownable,
-    BaseFeeCollectModule,
-    LensModuleMetadata
+    IPublicationActionModule,
+    HubRestricted,
+    LensModuleMetadata,
+    LensModuleRegistrant
 {
     using SafeERC20 for IERC20;
-    
+    uint16 internal constant BPS_MAX = 10000;
     error OngoingAuction();
     error UnavailableAuction();
     error CollectAlreadyProcessed();
     error FeeAlreadyProcessed();
     error InsufficientBidAmount();
+
+    event InitializedPublicationAction(
+        uint256 profileId,
+        uint256 pubId,
+        address transactionExecutor,
+        bytes data
+    );
+
+    event ProcessedPublicationAction(
+        uint256 profileId,
+        uint256 pubId,
+        address transactionExecutor,
+        bytes data
+    );
 
     event AuctionCreated(
         uint256 indexed profileId,
@@ -130,21 +143,21 @@ contract AuctionCollectModule is
 
     constructor(
         address hub,
-        address actionModule,
-        address moduleRegistry
+        IModuleRegistry moduleRegistry
     )
         Ownable()
-        BaseFeeCollectModule(hub, actionModule, moduleRegistry)
+        HubRestricted(hub)
         LensModuleMetadata()
+        LensModuleRegistrant(moduleRegistry)
         EIP712("AuctionCollectModule", "1")
     {}
 
     function supportsInterface(
         bytes4 interfaceID
-    ) public pure override(BaseFeeCollectModule, LensModule) returns (bool) {
+    ) public pure virtual override returns (bool) {
         return
-            BaseFeeCollectModule.supportsInterface(interfaceID) ||
-            LensModule.supportsInterface(interfaceID);
+            interfaceID == type(IPublicationActionModule).interfaceId ||
+            super.supportsInterface(interfaceID);
     }
 
     /**
@@ -152,11 +165,18 @@ contract AuctionCollectModule is
      *
      *
      */
-    function initializePublicationCollectModule(
+    function initializePublicationAction(
         uint256 profileId,
         uint256 pubId,
+        address transactionExecutor,
         bytes calldata data
-    ) external onlyActionModule returns (bytes memory) {
+    ) external override onlyHub returns (bytes memory) {
+         emit InitializedPublicationAction(
+            profileId,
+            pubId,
+            transactionExecutor,
+            data
+        );
         (
             uint64 availableSinceTimestamp,
             uint32 duration,
@@ -206,6 +226,49 @@ contract AuctionCollectModule is
     }
 
     /**
+     *  this open action makes the bid as gasless Open action
+     *  params.actionModuleData contains amount The bid amount to offer.
+     *  bidderProfileId The token ID of the bidder profile.
+     */
+    function processPublicationAction(
+        Types.ProcessActionParams calldata params
+    ) external override onlyHub returns (bytes memory) {
+        emit ProcessedPublicationAction(
+            params.publicationActedProfileId,
+            params.publicationActedId,
+            params.transactionExecutor,
+            params.actionModuleData
+        );
+
+        (uint256 rootProfileId, uint256 rootPubId) = _getRootPublication(
+            params.publicationActedProfileId,
+            params.publicationActedId
+        );
+        
+        (
+            uint256 amount,
+            uint256 bidderProfileId
+        ) = abi.decode(
+                params.actionModuleData,
+                (
+                    uint256,
+                    uint256
+                )
+            );
+        
+        _bid(
+            rootProfileId,
+            rootPubId,
+            params.publicationActedProfileId,
+            amount,
+            params.transactionExecutor,
+            bidderProfileId
+        );
+        return params.actionModuleData;
+    }
+
+
+    /**
      * @notice If the given publication has an auction, this function returns all its information.
      *
      * @param profileId The token ID of the profile associated with the underlying publication.
@@ -238,15 +301,15 @@ contract AuctionCollectModule is
         uint256 pubId,
         ModuleTypes.ProcessCollectParams calldata processCollectParams
         //ModuleTypes.ProcessCollectParams calldata data
-    ) external returns (bytes memory)   {
+    ) external onlyHub returns (bytes memory)   {
         //checks basic collect settings, like follower only and end date
-        _validateAndStoreCollect(processCollectParams);
+        //_validateAndStoreCollect(processCollectParams);
 
         // Override processCollect to add custom logic for processing the collect
         if (processCollectParams.referrerProfileIds.length == 0) {
-            _processCollect(processCollectParams);
+           //_processCollect(processCollectParams);
         } else {
-            _processCollectWithReferral(processCollectParams);
+           //_processCollectWithReferral(processCollectParams);
         }
     
         if (
@@ -310,40 +373,7 @@ contract AuctionCollectModule is
         _processCollectFee(profileId, pubId);
     }
 
-    /**
-     * @notice Places a bid by the given amount on the given publication's auction. If the publication is a mirror,
-     * the pointed publication auction will be used, setting the mirror's profileId as referrer if it's the first bid
-     * in the auction.
-     * Transaction will fail if the bid offered is below auction's current best price.
-     *
-     * @dev It will pull the tokens from the bidder to ensure the collect fees can be processed if the bidder ends up
-     * being the winner after auction ended. If a better bid is placed in the future by a different bidder, funds will
-     * be automatically transferred to the previous winner.
-     *
-     * @param profileId The token ID of the profile associated with the publication, could be a mirror.
-     * @param pubId The publication ID associated with the publication, could be a mirror.
-     * @param amount The bid amount to offer.
-     * @param bidderProfileId The token ID of the bidder profile.
-     */
-    function bid(
-        uint256 profileId,
-        uint256 pubId,
-        uint256 amount,
-        uint256 bidderProfileId
-    ) external {
-        (uint256 rootProfileId, uint256 rootPubId) = _getRootPublication(
-            profileId,
-            pubId
-        );
-        _bid(
-            rootProfileId,
-            rootPubId,
-            profileId,
-            amount,
-            msg.sender,
-            bidderProfileId
-        );
-    }
+    
 
     /**
      * @notice Using EIP-712 signatures, places a bid by the given amount on the given publication's auction.
@@ -470,7 +500,12 @@ contract AuctionCollectModule is
             onlyFollowers
         );
     }
-
+    // Declare the _treasuryData function and its return types
+    function _treasuryData() internal view returns (address, uint16) {
+        ILensHub HUB;
+        // Add your implementation here
+        return HUB.getTreasuryData();
+    }
     /**
      * @notice Process the fees from the given publication's underlying auction.
      *
@@ -502,7 +537,7 @@ contract AuctionCollectModule is
         }
         emit FeeProcessed(profileId, pubId, block.timestamp);
     }
-
+       
     /**
      * @notice Process the fees sending the winner amount to the recipient.
      *
@@ -516,6 +551,8 @@ contract AuctionCollectModule is
         address recipient
     ) internal {
         (address treasury, uint16 treasuryFee) = _treasuryData();
+
+       
         uint256 treasuryAmount = (winnerBid * treasuryFee) / BPS_MAX;
         uint256 adjustedAmount = winnerBid - treasuryAmount;
         IERC20(currency).safeTransfer(recipient, adjustedAmount);
@@ -523,6 +560,8 @@ contract AuctionCollectModule is
             IERC20(currency).safeTransfer(treasury, treasuryAmount);
         }
     }
+
+   
 
     /**
      * @notice Process the fees sending the winner amount to the recipient and the corresponding referral fee to the
@@ -876,22 +915,4 @@ contract AuctionCollectModule is
                 )
             );
     }
-
-    /// @inheritdoc ICollectModule
-    function initializePublicationCollectModule(
-        uint256 profileId,
-        uint256 pubId,
-        address transactionExecutor,
-        bytes calldata data
-    ) external override returns (bytes memory) {}
-
-    // function supportsInterface(
-    //     bytes4 interfaceID
-    // )
-    //     public
-    //     pure
-    //     virtual
-    //     override(BaseFeeCollectModule, LensModule)
-    //     returns (bool)
-    // {}
 } 
