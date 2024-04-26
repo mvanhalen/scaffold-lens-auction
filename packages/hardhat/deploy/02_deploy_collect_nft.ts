@@ -3,16 +3,23 @@ import { DeployFunction } from "hardhat-deploy/types";
 import { ethers } from "hardhat";
 import { LENS_HUB } from "../config";
 
+async function getNextContractAddress(senderAddress: string): Promise<string> {
+  const nonce = await ethers.provider.getTransactionCount(senderAddress);
+  const contractAddress = ethers.getCreateAddress({
+    from: senderAddress,
+    nonce: nonce + 1, // Use the next nonce to predict the next contract address
+  });
+  return contractAddress;
+}
+
 const deployCollectNFT: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deployer } = await hre.getNamedAccounts();
   const { deploy } = hre.deployments;
 
   const lensHubAddress = LENS_HUB;
 
-  const factory = await ethers.getContractFactory("AuctionActionModule");
-  const initCode = factory.bytecode;
-  const salt = ethers.keccak256(ethers.toUtf8Bytes("something very unique"));
-  const collectPublicationActionAddress = ethers.getCreate2Address(deployer, salt, ethers.keccak256(initCode));
+  // Predict the Action address because of circular dependency
+  const collectPublicationActionAddress = await getNextContractAddress(deployer);
 
   await deploy("CollectNFT", {
     from: deployer,
