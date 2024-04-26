@@ -9,7 +9,7 @@ const deployCollectNFT: DeployFunction = async function (hre: HardhatRuntimeEnvi
 
   const lensHubAddress = LENS_HUB;
 
-  const factory = await ethers.getContractFactory("CollectPublicationAction");
+  const factory = await ethers.getContractFactory("AuctionActionModule");
   const initCode = factory.bytecode;
   const salt = ethers.keccak256(ethers.toUtf8Bytes("something very unique"));
   const collectPublicationActionAddress = ethers.getCreate2Address(deployer, salt, ethers.keccak256(initCode));
