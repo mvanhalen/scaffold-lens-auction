@@ -350,6 +350,10 @@ contract AuctionActionModule is
         return collectNFT;
     }
 
+    function getCollectNFT(uint256 profileId, uint256 pubId) external view returns (address) {
+        return _collectNFTByPub[profileId][pubId];
+    }
+
     /**
      *
      * @dev Process the collect by ensuring:
@@ -360,10 +364,7 @@ contract AuctionActionModule is
      */
     function claim(
         uint256 collectedProfileId,
-        uint256 collectedPubId,
-        address collectorProfileOwner,
-        uint256 collectorProfileId,
-        uint256 referrerProfileId
+        uint256 collectedPubId
     ) external {
         if (
             block.timestamp <
@@ -378,16 +379,11 @@ contract AuctionActionModule is
         ) {
             revert OngoingAuction();
         }
-        if (
-            collectorProfileOwner != _auctionDataByPubByProfile[collectedProfileId][collectedPubId].winner.profileOwner ||
-            referrerProfileId !=
-            _referrerProfileIdByPubByProfile[collectedProfileId][collectedPubId][collectorProfileOwner]
-        ) {
-            revert ModuleDataMismatch();
-        }
         if (_auctionDataByPubByProfile[collectedProfileId][collectedPubId].collected) {
             revert CollectAlreadyProcessed();
         }
+
+        Winner storage winner = _auctionDataByPubByProfile[collectedProfileId][collectedPubId].winner;
 
         address collectNFT = _getOrDeployCollectNFT({
             publicationCollectedProfileId: collectedProfileId,
@@ -395,7 +391,7 @@ contract AuctionActionModule is
             collectNFTImpl: COLLECT_NFT_IMPL
         });
 
-        uint256 tokenId = ICollectNFT(collectNFT).mint(collectorProfileOwner);
+        uint256 tokenId = ICollectNFT(collectNFT).mint(winner.profileOwner);
 
         _auctionDataByPubByProfile[collectedProfileId][collectedPubId].collected = true;
         if (!_auctionDataByPubByProfile[collectedProfileId][collectedPubId].feeProcessed) {
@@ -405,8 +401,8 @@ contract AuctionActionModule is
         emit Collected({
             collectedProfileId: collectedProfileId,
             collectedPubId: collectedPubId,
-            collectorProfileId: collectorProfileId,
-            nftRecipient: collectorProfileOwner,
+            collectorProfileId: winner.profileId,
+            nftRecipient: winner.profileOwner,
             collectNFT: collectNFT,
             tokenId: tokenId,
             timestamp: block.timestamp
