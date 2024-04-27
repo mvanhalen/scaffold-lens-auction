@@ -6,6 +6,1754 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 
 const deployedContracts = {
   31337: {
+    AuctionActionModule: {
+      address: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+      abi: [
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "hub",
+              type: "address",
+            },
+            {
+              internalType: "contract IModuleRegistry",
+              name: "moduleRegistry",
+              type: "address",
+            },
+            {
+              internalType: "address",
+              name: "collectNFTImpl",
+              type: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "constructor",
+        },
+        {
+          inputs: [],
+          name: "CollectAlreadyProcessed",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "FeeAlreadyProcessed",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "InitParamsInvalid",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "InsufficientBidAmount",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "NotFollowing",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "NotHub",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "OngoingAuction",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "UnavailableAuction",
+          type: "error",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "profileId",
+              type: "uint256",
+            },
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "pubId",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint64",
+              name: "availableSinceTimestamp",
+              type: "uint64",
+            },
+            {
+              indexed: false,
+              internalType: "uint32",
+              name: "duration",
+              type: "uint32",
+            },
+            {
+              indexed: false,
+              internalType: "uint32",
+              name: "minTimeAfterBid",
+              type: "uint32",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "reservePrice",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "minBidIncrement",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint16",
+              name: "referralFee",
+              type: "uint16",
+            },
+            {
+              indexed: false,
+              internalType: "address",
+              name: "currency",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "address",
+              name: "recipient",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "bool",
+              name: "onlyFollowers",
+              type: "bool",
+            },
+          ],
+          name: "AuctionCreated",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "profileId",
+              type: "uint256",
+            },
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "pubId",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "referrerProfileId",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "address",
+              name: "bidderOwner",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "bidderProfileId",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "address",
+              name: "transactionExecutor",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "endTimestamp",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "timestamp",
+              type: "uint256",
+            },
+          ],
+          name: "BidPlaced",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "profileId",
+              type: "uint256",
+            },
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "pubId",
+              type: "uint256",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "collectNFT",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "timestamp",
+              type: "uint256",
+            },
+          ],
+          name: "CollectNFTDeployed",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "collectedProfileId",
+              type: "uint256",
+            },
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "collectedPubId",
+              type: "uint256",
+            },
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "collectorProfileId",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "address",
+              name: "nftRecipient",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "address",
+              name: "collectNFT",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "tokenId",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "timestamp",
+              type: "uint256",
+            },
+          ],
+          name: "Collected",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "profileId",
+              type: "uint256",
+            },
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "pubId",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "timestamp",
+              type: "uint256",
+            },
+          ],
+          name: "FeeProcessed",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "profileId",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "pubId",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "address",
+              name: "transactionExecutor",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "bytes",
+              name: "data",
+              type: "bytes",
+            },
+          ],
+          name: "InitializedPublicationAction",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [],
+          name: "ModuleRegistered",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "previousOwner",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "newOwner",
+              type: "address",
+            },
+          ],
+          name: "OwnershipTransferred",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "profileId",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "pubId",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "address",
+              name: "transactionExecutor",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "bytes",
+              name: "data",
+              type: "bytes",
+            },
+          ],
+          name: "ProcessedPublicationAction",
+          type: "event",
+        },
+        {
+          inputs: [],
+          name: "COLLECT_NFT_IMPL",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "HUB",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "MODULE_REGISTRY",
+          outputs: [
+            {
+              internalType: "contract IModuleRegistry",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "collectedProfileId",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "collectedPubId",
+              type: "uint256",
+            },
+          ],
+          name: "claim",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "profileId",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "pubId",
+              type: "uint256",
+            },
+          ],
+          name: "getAuctionData",
+          outputs: [
+            {
+              components: [
+                {
+                  internalType: "uint64",
+                  name: "availableSinceTimestamp",
+                  type: "uint64",
+                },
+                {
+                  internalType: "uint64",
+                  name: "startTimestamp",
+                  type: "uint64",
+                },
+                {
+                  internalType: "uint32",
+                  name: "duration",
+                  type: "uint32",
+                },
+                {
+                  internalType: "uint32",
+                  name: "minTimeAfterBid",
+                  type: "uint32",
+                },
+                {
+                  internalType: "uint64",
+                  name: "endTimestamp",
+                  type: "uint64",
+                },
+                {
+                  internalType: "uint256",
+                  name: "reservePrice",
+                  type: "uint256",
+                },
+                {
+                  internalType: "uint256",
+                  name: "minBidIncrement",
+                  type: "uint256",
+                },
+                {
+                  internalType: "uint256",
+                  name: "winningBid",
+                  type: "uint256",
+                },
+                {
+                  internalType: "uint16",
+                  name: "referralFee",
+                  type: "uint16",
+                },
+                {
+                  internalType: "address",
+                  name: "currency",
+                  type: "address",
+                },
+                {
+                  internalType: "address",
+                  name: "recipient",
+                  type: "address",
+                },
+                {
+                  components: [
+                    {
+                      internalType: "uint256",
+                      name: "profileId",
+                      type: "uint256",
+                    },
+                    {
+                      internalType: "address",
+                      name: "profileOwner",
+                      type: "address",
+                    },
+                    {
+                      internalType: "address",
+                      name: "transactionExecutor",
+                      type: "address",
+                    },
+                  ],
+                  internalType: "struct Winner",
+                  name: "winner",
+                  type: "tuple",
+                },
+                {
+                  internalType: "bool",
+                  name: "onlyFollowers",
+                  type: "bool",
+                },
+                {
+                  internalType: "bool",
+                  name: "collected",
+                  type: "bool",
+                },
+                {
+                  internalType: "bool",
+                  name: "feeProcessed",
+                  type: "bool",
+                },
+              ],
+              internalType: "struct AuctionData",
+              name: "",
+              type: "tuple",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "getModuleMetadataURI",
+          outputs: [
+            {
+              internalType: "string",
+              name: "",
+              type: "string",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "profileId",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "pubId",
+              type: "uint256",
+            },
+            {
+              internalType: "address",
+              name: "bidder",
+              type: "address",
+            },
+          ],
+          name: "getReferrerProfileIdOf",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "profileId",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "pubId",
+              type: "uint256",
+            },
+            {
+              internalType: "address",
+              name: "transactionExecutor",
+              type: "address",
+            },
+            {
+              internalType: "bytes",
+              name: "data",
+              type: "bytes",
+            },
+          ],
+          name: "initializePublicationAction",
+          outputs: [
+            {
+              internalType: "bytes",
+              name: "",
+              type: "bytes",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "isRegistered",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "owner",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "profileId",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "pubId",
+              type: "uint256",
+            },
+          ],
+          name: "processCollectFee",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              components: [
+                {
+                  internalType: "uint256",
+                  name: "publicationActedProfileId",
+                  type: "uint256",
+                },
+                {
+                  internalType: "uint256",
+                  name: "publicationActedId",
+                  type: "uint256",
+                },
+                {
+                  internalType: "uint256",
+                  name: "actorProfileId",
+                  type: "uint256",
+                },
+                {
+                  internalType: "address",
+                  name: "actorProfileOwner",
+                  type: "address",
+                },
+                {
+                  internalType: "address",
+                  name: "transactionExecutor",
+                  type: "address",
+                },
+                {
+                  internalType: "uint256[]",
+                  name: "referrerProfileIds",
+                  type: "uint256[]",
+                },
+                {
+                  internalType: "uint256[]",
+                  name: "referrerPubIds",
+                  type: "uint256[]",
+                },
+                {
+                  internalType: "enum Types.PublicationType[]",
+                  name: "referrerPubTypes",
+                  type: "uint8[]",
+                },
+                {
+                  internalType: "bytes",
+                  name: "actionModuleData",
+                  type: "bytes",
+                },
+              ],
+              internalType: "struct Types.ProcessActionParams",
+              name: "params",
+              type: "tuple",
+            },
+          ],
+          name: "processPublicationAction",
+          outputs: [
+            {
+              internalType: "bytes",
+              name: "",
+              type: "bytes",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "registerModule",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "renounceOwnership",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "string",
+              name: "_metadataURI",
+              type: "string",
+            },
+          ],
+          name: "setModuleMetadataURI",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "bytes4",
+              name: "interfaceID",
+              type: "bytes4",
+            },
+          ],
+          name: "supportsInterface",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "pure",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "newOwner",
+              type: "address",
+            },
+          ],
+          name: "transferOwnership",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+      ],
+      inheritedFunctions: {
+        initializePublicationAction: "lens-modules/contracts/interfaces/IPublicationActionModule.sol",
+        processPublicationAction: "lens-modules/contracts/interfaces/IPublicationActionModule.sol",
+        HUB: "lens-modules/contracts/base/HubRestricted.sol",
+        getModuleMetadataURI: "lens-modules/contracts/modules/LensModuleMetadata.sol",
+        owner: "lens-modules/contracts/modules/base/LensModuleRegistrant.sol",
+        renounceOwnership: "lens-modules/contracts/modules/base/LensModuleRegistrant.sol",
+        setModuleMetadataURI: "lens-modules/contracts/modules/LensModuleMetadata.sol",
+        supportsInterface: "lens-modules/contracts/modules/LensModuleMetadata.sol",
+        transferOwnership: "lens-modules/contracts/modules/base/LensModuleRegistrant.sol",
+        MODULE_REGISTRY: "lens-modules/contracts/modules/base/LensModuleRegistrant.sol",
+        isRegistered: "lens-modules/contracts/modules/base/LensModuleRegistrant.sol",
+        registerModule: "lens-modules/contracts/modules/base/LensModuleRegistrant.sol",
+      },
+    },
+    CollectNFT: {
+      address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+      abi: [
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "hub",
+              type: "address",
+            },
+            {
+              internalType: "address",
+              name: "actionModule",
+              type: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "constructor",
+        },
+        {
+          inputs: [],
+          name: "Initialized",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "InvalidOwner",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "InvalidParameter",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "NonERC721ReceiverImplementer",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "NotActionModule",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "NotOwnerOrApproved",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "NotProfileOwner",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "TokenDoesNotExist",
+          type: "error",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "approved",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "tokenId",
+              type: "uint256",
+            },
+          ],
+          name: "Approval",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "operator",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "bool",
+              name: "approved",
+              type: "bool",
+            },
+          ],
+          name: "ApprovalForAll",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "from",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "to",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "tokenId",
+              type: "uint256",
+            },
+          ],
+          name: "Transfer",
+          type: "event",
+        },
+        {
+          inputs: [],
+          name: "ACTION_MODULE",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "HUB",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "to",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "tokenId",
+              type: "uint256",
+            },
+          ],
+          name: "approve",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+          ],
+          name: "balanceOf",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "tokenId",
+              type: "uint256",
+            },
+          ],
+          name: "burn",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "tokenId",
+              type: "uint256",
+            },
+          ],
+          name: "exists",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "tokenId",
+              type: "uint256",
+            },
+          ],
+          name: "getApproved",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "getDomainSeparator",
+          outputs: [
+            {
+              internalType: "bytes32",
+              name: "",
+              type: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "getSourcePublicationPointer",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "profileId",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "pubId",
+              type: "uint256",
+            },
+          ],
+          name: "initialize",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+            {
+              internalType: "address",
+              name: "operator",
+              type: "address",
+            },
+          ],
+          name: "isApprovedForAll",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "to",
+              type: "address",
+            },
+          ],
+          name: "mint",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "tokenId",
+              type: "uint256",
+            },
+          ],
+          name: "mintTimestampOf",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "name",
+          outputs: [
+            {
+              internalType: "string",
+              name: "",
+              type: "string",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "signer",
+              type: "address",
+            },
+          ],
+          name: "nonces",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "tokenId",
+              type: "uint256",
+            },
+          ],
+          name: "ownerOf",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "tokenId",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "salePrice",
+              type: "uint256",
+            },
+          ],
+          name: "royaltyInfo",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "from",
+              type: "address",
+            },
+            {
+              internalType: "address",
+              name: "to",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "tokenId",
+              type: "uint256",
+            },
+          ],
+          name: "safeTransferFrom",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "from",
+              type: "address",
+            },
+            {
+              internalType: "address",
+              name: "to",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "tokenId",
+              type: "uint256",
+            },
+            {
+              internalType: "bytes",
+              name: "_data",
+              type: "bytes",
+            },
+          ],
+          name: "safeTransferFrom",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "operator",
+              type: "address",
+            },
+            {
+              internalType: "bool",
+              name: "approved",
+              type: "bool",
+            },
+          ],
+          name: "setApprovalForAll",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "royaltiesInBasisPoints",
+              type: "uint256",
+            },
+          ],
+          name: "setRoyalty",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "bytes4",
+              name: "interfaceId",
+              type: "bytes4",
+            },
+          ],
+          name: "supportsInterface",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "symbol",
+          outputs: [
+            {
+              internalType: "string",
+              name: "",
+              type: "string",
+            },
+          ],
+          stateMutability: "pure",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "tokenId",
+              type: "uint256",
+            },
+          ],
+          name: "tokenDataOf",
+          outputs: [
+            {
+              components: [
+                {
+                  internalType: "address",
+                  name: "owner",
+                  type: "address",
+                },
+                {
+                  internalType: "uint96",
+                  name: "mintTimestamp",
+                  type: "uint96",
+                },
+              ],
+              internalType: "struct Types.TokenData",
+              name: "",
+              type: "tuple",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "tokenId",
+              type: "uint256",
+            },
+          ],
+          name: "tokenURI",
+          outputs: [
+            {
+              internalType: "string",
+              name: "",
+              type: "string",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "totalSupply",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "from",
+              type: "address",
+            },
+            {
+              internalType: "address",
+              name: "to",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "tokenId",
+              type: "uint256",
+            },
+          ],
+          name: "transferFrom",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+      ],
+      inheritedFunctions: {
+        royaltyInfo: "lens-modules/contracts/base/ERC2981CollectionRoyalties.sol",
+        setRoyalty: "lens-modules/contracts/base/ERC2981CollectionRoyalties.sol",
+        supportsInterface: "lens-modules/contracts/base/ERC2981CollectionRoyalties.sol",
+        ACTION_MODULE: "lens-modules/contracts/modules/ActionRestricted.sol",
+        getSourcePublicationPointer: "lens-modules/contracts/interfaces/ICollectNFT.sol",
+        initialize: "lens-modules/contracts/interfaces/ICollectNFT.sol",
+        mint: "lens-modules/contracts/interfaces/ICollectNFT.sol",
+      },
+    },
+    ModuleRegistry: {
+      address: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+      abi: [
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "moduleType",
+              type: "uint256",
+            },
+          ],
+          name: "ModuleDoesNotSupportType",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "NotLensModule",
+          type: "error",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "moduleAddress",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "moduleType",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "string",
+              name: "metadata",
+              type: "string",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "timestamp",
+              type: "uint256",
+            },
+          ],
+          name: "ModuleRegistered",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "erc20CurrencyAddress",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "string",
+              name: "name",
+              type: "string",
+            },
+            {
+              indexed: false,
+              internalType: "string",
+              name: "symbol",
+              type: "string",
+            },
+            {
+              indexed: false,
+              internalType: "uint8",
+              name: "decimals",
+              type: "uint8",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "timestamp",
+              type: "uint256",
+            },
+          ],
+          name: "erc20CurrencyRegistered",
+          type: "event",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "moduleAddress",
+              type: "address",
+            },
+          ],
+          name: "getModuleTypes",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "currencyAddress",
+              type: "address",
+            },
+          ],
+          name: "isErc20CurrencyRegistered",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "moduleAddress",
+              type: "address",
+            },
+          ],
+          name: "isModuleRegistered",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "moduleAddress",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "moduleType",
+              type: "uint256",
+            },
+          ],
+          name: "isModuleRegisteredAs",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "currencyAddress",
+              type: "address",
+            },
+          ],
+          name: "registerErc20Currency",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "registrationWasPerformed",
+              type: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "moduleAddress",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "moduleType",
+              type: "uint256",
+            },
+          ],
+          name: "registerModule",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "registrationWasPerformed",
+              type: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "currencyAddress",
+              type: "address",
+            },
+          ],
+          name: "verifyErc20Currency",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "moduleAddress",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "moduleType",
+              type: "uint256",
+            },
+          ],
+          name: "verifyModule",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+      ],
+      inheritedFunctions: {
+        getModuleTypes: "lens-modules/contracts/interfaces/IModuleRegistry.sol",
+        isErc20CurrencyRegistered: "lens-modules/contracts/interfaces/IModuleRegistry.sol",
+        isModuleRegistered: "lens-modules/contracts/interfaces/IModuleRegistry.sol",
+        isModuleRegisteredAs: "lens-modules/contracts/interfaces/IModuleRegistry.sol",
+        registerErc20Currency: "lens-modules/contracts/interfaces/IModuleRegistry.sol",
+        registerModule: "lens-modules/contracts/interfaces/IModuleRegistry.sol",
+        verifyErc20Currency: "lens-modules/contracts/interfaces/IModuleRegistry.sol",
+        verifyModule: "lens-modules/contracts/interfaces/IModuleRegistry.sol",
+      },
+    },
     TestToken: {
       address: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
       abi: [

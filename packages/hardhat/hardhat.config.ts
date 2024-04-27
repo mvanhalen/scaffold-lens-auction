@@ -32,17 +32,21 @@ const config: HardhatUserConfig = {
       optimizer: {
         enabled: true,
         // https://docs.soliditylang.org/en/latest/using-the-compiler.html#optimizer-options
-        runs: 200,
+        runs: 1_000_000,
+      },
+      outputSelection: {
+        "*": {
+          "*": ["storageLayout"],
+        },
       },
     },
   },
-  // dependencyCompiler: {
-  //   paths: [
-  //     "lens-modules/contracts/misc/ModuleRegistry.sol",
-  //     "lens-modules/contracts/modules/act/collect/CollectPublicationAction.sol",
-  //     "lens-modules/contracts/modules/act/collect/CollectNFT.sol",
-  //   ],
-  // },
+  dependencyCompiler: {
+    paths: [
+      "lens-modules/contracts/misc/ModuleRegistry.sol",
+      "lens-modules/contracts/modules/act/collect/CollectNFT.sol",
+    ],
+  },
   defaultNetwork: "localhost",
   namedAccounts: {
     deployer: {
