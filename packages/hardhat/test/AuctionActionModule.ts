@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { AuctionActionModule, CollectNFT, ModuleRegistry, TestToken } from "../typechain-types";
+import { AuctionActionModule, CustomCollectNFT, ModuleRegistry, TestToken } from "../typechain-types";
 import getNextContractAddress from "../lib/get-next-contract-address";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 
@@ -13,7 +13,7 @@ describe("AuctionActionModule", () => {
   let auctionAction: AuctionActionModule;
   let testToken: TestToken;
   let moduleRegistry: ModuleRegistry;
-  let collectNFT: CollectNFT;
+  let collectNFT: CustomCollectNFT;
 
   let lensHubAddress: string;
   let authorAddress: string;
@@ -41,8 +41,14 @@ describe("AuctionActionModule", () => {
 
     await moduleRegistry.registerErc20Currency(await testToken.getAddress());
 
-    const CollectNFT = await ethers.getContractFactory("CollectNFT");
-    collectNFT = await CollectNFT.deploy(lensHubAddress, getNextContractAddress(lensHubAddress));
+    const CollectNFT = await ethers.getContractFactory("CustomCollectNFT");
+    collectNFT = await CollectNFT.deploy(
+      lensHubAddress,
+      getNextContractAddress(lensHubAddress),
+      "TEST",
+      "Custom NFT Title",
+      1000,
+    );
 
     // Deploy a new TipActionModule contract for each test
     const AuctionActionModule = await ethers.getContractFactory("AuctionActionModule");
