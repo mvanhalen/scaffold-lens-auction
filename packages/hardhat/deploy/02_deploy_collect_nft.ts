@@ -14,7 +14,7 @@ const deployCollectNFT: DeployFunction = async function (hre: HardhatRuntimeEnvi
 
   await deploy("CustomCollectNFT", {
     from: deployer,
-    args: [lensHubAddress, auctionActionAddress, "TEST", "Custom NFT Title", 1000],
+    args: [lensHubAddress, auctionActionAddress],
     log: true,
     autoMine: true,
   });

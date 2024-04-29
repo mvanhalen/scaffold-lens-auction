@@ -46,6 +46,7 @@ const config: HardhatUserConfig = {
     paths: [
       "lens-modules/contracts/misc/ModuleRegistry.sol",
       "lens-modules/contracts/modules/act/collect/CollectNFT.sol",
+      "lens-modules/contracts/modules/act/collect/CollectPublicationAction.sol",
     ],
   },
   defaultNetwork: "localhost",
