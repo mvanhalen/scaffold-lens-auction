@@ -4,7 +4,7 @@ pragma solidity ^0.8.19;
 import {ILensGovernable} from "lens-modules/contracts/interfaces/ILensGovernable.sol";
 import {Types} from "lens-modules/contracts/libraries/constants/Types.sol";
 
-contract MockLensHub is ILensGovernable {
+contract MockLensGovernable is ILensGovernable {
     address public treasury;
     uint16 public treasuryFeeBps;
 

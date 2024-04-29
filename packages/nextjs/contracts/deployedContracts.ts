@@ -17,6 +17,11 @@ const deployedContracts = {
               type: "address",
             },
             {
+              internalType: "address",
+              name: "treasury",
+              type: "address",
+            },
+            {
               internalType: "contract IModuleRegistry",
               name: "moduleRegistry",
               type: "address",
@@ -138,6 +143,24 @@ const deployedContracts = {
               internalType: "bool",
               name: "onlyFollowers",
               type: "bool",
+            },
+            {
+              indexed: false,
+              internalType: "string",
+              name: "tokenName",
+              type: "string",
+            },
+            {
+              indexed: false,
+              internalType: "string",
+              name: "tokenSymbol",
+              type: "string",
+            },
+            {
+              indexed: false,
+              internalType: "uint16",
+              name: "tokenRoyalty",
+              type: "uint16",
             },
           ],
           name: "AuctionCreated",
@@ -436,6 +459,19 @@ const deployedContracts = {
           type: "function",
         },
         {
+          inputs: [],
+          name: "TREASURY",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
           inputs: [
             {
               internalType: "uint256",
@@ -562,10 +598,49 @@ const deployedContracts = {
                   name: "feeProcessed",
                   type: "bool",
                 },
+                {
+                  internalType: "string",
+                  name: "tokenName",
+                  type: "string",
+                },
+                {
+                  internalType: "string",
+                  name: "tokenSymbol",
+                  type: "string",
+                },
+                {
+                  internalType: "uint16",
+                  name: "tokenRoyalty",
+                  type: "uint16",
+                },
               ],
               internalType: "struct AuctionData",
               name: "",
               type: "tuple",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "profileId",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "pubId",
+              type: "uint256",
+            },
+          ],
+          name: "getCollectNFT",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
             },
           ],
           stateMutability: "view",
@@ -838,7 +913,7 @@ const deployedContracts = {
         registerModule: "lens-modules/contracts/modules/base/LensModuleRegistrant.sol",
       },
     },
-    CollectNFT: {
+    CustomCollectNFT: {
       address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
       abi: [
         {
@@ -1129,6 +1204,21 @@ const deployedContracts = {
               name: "pubId",
               type: "uint256",
             },
+            {
+              internalType: "string",
+              name: "tokenName",
+              type: "string",
+            },
+            {
+              internalType: "string",
+              name: "tokenSymbol",
+              type: "string",
+            },
+            {
+              internalType: "uint16",
+              name: "royalty",
+              type: "uint16",
+            },
           ],
           name: "initialize",
           outputs: [],
@@ -1388,7 +1478,7 @@ const deployedContracts = {
               type: "string",
             },
           ],
-          stateMutability: "pure",
+          stateMutability: "view",
           type: "function",
         },
         {
@@ -1479,13 +1569,31 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {
+        approve: "lens-modules/contracts/base/LensBaseERC721.sol",
+        balanceOf: "lens-modules/contracts/base/LensBaseERC721.sol",
+        burn: "lens-modules/contracts/base/LensBaseERC721.sol",
+        exists: "lens-modules/contracts/base/LensBaseERC721.sol",
+        getApproved: "lens-modules/contracts/base/LensBaseERC721.sol",
+        getDomainSeparator: "lens-modules/contracts/base/LensBaseERC721.sol",
+        isApprovedForAll: "lens-modules/contracts/base/LensBaseERC721.sol",
+        mintTimestampOf: "lens-modules/contracts/base/LensBaseERC721.sol",
+        name: "lens-modules/contracts/base/LensBaseERC721.sol",
+        nonces: "lens-modules/contracts/base/LensBaseERC721.sol",
+        ownerOf: "lens-modules/contracts/base/LensBaseERC721.sol",
+        safeTransferFrom: "lens-modules/contracts/base/LensBaseERC721.sol",
+        setApprovalForAll: "lens-modules/contracts/base/LensBaseERC721.sol",
+        supportsInterface: "lens-modules/contracts/base/ERC2981CollectionRoyalties.sol",
+        symbol: "lens-modules/contracts/base/LensBaseERC721.sol",
+        tokenDataOf: "lens-modules/contracts/base/LensBaseERC721.sol",
+        tokenURI: "lens-modules/contracts/base/LensBaseERC721.sol",
+        totalSupply: "lens-modules/contracts/base/LensBaseERC721.sol",
+        transferFrom: "lens-modules/contracts/base/LensBaseERC721.sol",
         royaltyInfo: "lens-modules/contracts/base/ERC2981CollectionRoyalties.sol",
         setRoyalty: "lens-modules/contracts/base/ERC2981CollectionRoyalties.sol",
-        supportsInterface: "lens-modules/contracts/base/ERC2981CollectionRoyalties.sol",
         ACTION_MODULE: "lens-modules/contracts/modules/ActionRestricted.sol",
-        getSourcePublicationPointer: "lens-modules/contracts/interfaces/ICollectNFT.sol",
-        initialize: "lens-modules/contracts/interfaces/ICollectNFT.sol",
-        mint: "lens-modules/contracts/interfaces/ICollectNFT.sol",
+        getSourcePublicationPointer: "contracts/interfaces/ICustomCollectNFT.sol",
+        initialize: "contracts/interfaces/ICustomCollectNFT.sol",
+        mint: "contracts/interfaces/ICustomCollectNFT.sol",
       },
     },
     ModuleRegistry: {
