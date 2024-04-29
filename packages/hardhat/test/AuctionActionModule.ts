@@ -42,13 +42,7 @@ describe("AuctionActionModule", () => {
     await moduleRegistry.registerErc20Currency(await testToken.getAddress());
 
     const CollectNFT = await ethers.getContractFactory("CustomCollectNFT");
-    collectNFT = await CollectNFT.deploy(
-      lensHubAddress,
-      getNextContractAddress(lensHubAddress),
-      "TEST",
-      "Custom NFT Title",
-      1000,
-    );
+    collectNFT = await CollectNFT.deploy(lensHubAddress, getNextContractAddress(lensHubAddress));
 
     // Deploy a new TipActionModule contract for each test
     const AuctionActionModule = await ethers.getContractFactory("AuctionActionModule");
@@ -76,8 +70,24 @@ describe("AuctionActionModule", () => {
     const minBidIncrement = ethers.parseEther("0.001");
     const referralFee = 1000;
     const onlyFollowers = false;
+    const tokenName = "Test Token";
+    const tokenSymbol = "TST";
+    const tokenRoyalties = 1000;
     const data = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint64", "uint32", "uint32", "uint256", "uint256", "uint16", "address", "address", "bool"],
+      [
+        "uint64",
+        "uint32",
+        "uint32",
+        "uint256",
+        "uint256",
+        "uint16",
+        "address",
+        "address",
+        "bool",
+        "string",
+        "string",
+        "uint16",
+      ],
       [
         availableSinceTimestamp,
         duration,
@@ -88,6 +98,9 @@ describe("AuctionActionModule", () => {
         currency,
         authorAddress,
         onlyFollowers,
+        tokenName,
+        tokenSymbol,
+        tokenRoyalties,
       ],
     );
     const tx = auctionAction.initializePublicationAction(PROFILE_ID, PUBLICATION_ID, authorAddress, data);
@@ -103,6 +116,9 @@ describe("AuctionActionModule", () => {
       currency,
       authorAddress,
       onlyFollowers,
+      tokenName,
+      tokenSymbol,
+      tokenRoyalties,
     };
   };
 
@@ -120,6 +136,9 @@ describe("AuctionActionModule", () => {
       currency,
       authorAddress,
       onlyFollowers,
+      tokenName,
+      tokenSymbol,
+      tokenRoyalties,
     } = await initialize();
 
     await expect(tx)
@@ -138,6 +157,9 @@ describe("AuctionActionModule", () => {
         currency,
         authorAddress,
         onlyFollowers,
+        tokenName,
+        tokenSymbol,
+        tokenRoyalties,
       );
 
     await expect(tx).not.to.revertedWithCustomError(auctionAction, "InitParamsInvalid");
