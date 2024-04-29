@@ -9,7 +9,7 @@ import {IPublicationActionModule} from "lens-modules/contracts/interfaces/IPubli
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC721Timestamped} from "lens-modules/contracts/interfaces/IERC721Timestamped.sol";
-import {ILensHub} from "lens-modules/contracts/interfaces/ILensHub.sol";
+import {ILensGovernable} from "lens-modules/contracts/interfaces/ILensGovernable.sol";
 import {LensModule} from "lens-modules/contracts/modules/LensModule.sol";
 import {LensModuleMetadata} from "lens-modules/contracts/modules/LensModuleMetadata.sol";
 import {LensModuleRegistrant} from "lens-modules/contracts/modules/base/LensModuleRegistrant.sol";
@@ -183,6 +183,7 @@ contract AuctionActionModule is
     );
 
     address public immutable COLLECT_NFT_IMPL;
+    address public immutable TREASURY;
 
     mapping(uint256 profileId => mapping(uint256 pubId => address collectNFT))
         internal _collectNFTByPub;
@@ -200,6 +201,7 @@ contract AuctionActionModule is
 
     constructor(
         address hub,
+        address treasury,
         IModuleRegistry moduleRegistry,
         address collectNFTImpl
     )
@@ -208,6 +210,7 @@ contract AuctionActionModule is
         LensModuleMetadata()
         LensModuleRegistrant(moduleRegistry)
     {
+        TREASURY = treasury;
         COLLECT_NFT_IMPL = collectNFTImpl;
     }
 
@@ -593,7 +596,7 @@ contract AuctionActionModule is
     }
 
     function _treasuryData() internal view returns (address, uint16) {
-        return ILensHub(HUB).getTreasuryData();
+        return ILensGovernable(TREASURY).getTreasuryData();
     }
 
     /**
@@ -640,15 +643,14 @@ contract AuctionActionModule is
         address currency,
         address recipient
     ) internal {
-        //        (address treasury, uint16 treasuryFee) = _treasuryData();
-        //
-        //        uint256 treasuryAmount = (winnerBid * treasuryFee) / BPS_MAX;
-        //        uint256 adjustedAmount = winnerBid - treasuryAmount;
-        //        IERC20(currency).safeTransfer(recipient, adjustedAmount);
-        //        if (treasuryAmount > 0) {
-        //            IERC20(currency).safeTransfer(treasury, treasuryAmount);
-        //        }
-        IERC20(currency).safeTransfer(recipient, winnerBid);
+        (address treasury, uint16 treasuryFee) = _treasuryData();
+
+        uint256 treasuryAmount = (winnerBid * treasuryFee) / BPS_MAX;
+        uint256 adjustedAmount = winnerBid - treasuryAmount;
+        IERC20(currency).safeTransfer(recipient, adjustedAmount);
+        if (treasuryAmount > 0) {
+            IERC20(currency).safeTransfer(treasury, treasuryAmount);
+        }
     }
 
     /**
@@ -669,24 +671,23 @@ contract AuctionActionModule is
         address currency,
         address recipient
     ) internal {
-        //        (address treasury, uint16 treasuryFee) = _treasuryData();
-        //        uint256 treasuryAmount = (winnerBid * treasuryFee) / BPS_MAX;
-        //        uint256 adjustedAmount = winnerBid - treasuryAmount;
-        //        if (referralFee > 0) {
-        //            // The reason we levy the referral fee on the adjusted amount is so that referral fees
-        //            // don't bypass the treasury fee, in essence referrals pay their fair share to the treasury.
-        //            uint256 referralAmount = (adjustedAmount * referralFee) / BPS_MAX;
-        //            adjustedAmount = adjustedAmount - referralAmount;
-        //            IERC20(currency).safeTransfer(
-        //                IERC721(HUB).ownerOf(referrerProfileId),
-        //                referralAmount
-        //            );
-        //        }
-        //        IERC20(currency).safeTransfer(recipient, adjustedAmount);
-        //        if (treasuryAmount > 0) {
-        //            IERC20(currency).safeTransfer(treasury, treasuryAmount);
-        //        }
-        IERC20(currency).safeTransfer(recipient, winnerBid);
+        (address treasury, uint16 treasuryFee) = _treasuryData();
+        uint256 treasuryAmount = (winnerBid * treasuryFee) / BPS_MAX;
+        uint256 adjustedAmount = winnerBid - treasuryAmount;
+        if (referralFee > 0) {
+            // The reason we levy the referral fee on the adjusted amount is so that referral fees
+            // don't bypass the treasury fee, in essence referrals pay their fair share to the treasury.
+            uint256 referralAmount = (adjustedAmount * referralFee) / BPS_MAX;
+            adjustedAmount = adjustedAmount - referralAmount;
+            IERC20(currency).safeTransfer(
+                IERC721(HUB).ownerOf(referrerProfileId),
+                referralAmount
+            );
+        }
+        IERC20(currency).safeTransfer(recipient, adjustedAmount);
+        if (treasuryAmount > 0) {
+            IERC20(currency).safeTransfer(treasury, treasuryAmount);
+        }
     }
 
     /**

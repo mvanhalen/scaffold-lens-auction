@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { AuctionActionModule, CustomCollectNFT, ModuleRegistry, TestToken } from "../typechain-types";
+import { AuctionActionModule, CustomCollectNFT, MockLensHub, ModuleRegistry, TestToken } from "../typechain-types";
 import getNextContractAddress from "../lib/get-next-contract-address";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 
@@ -14,6 +14,7 @@ describe("AuctionActionModule", () => {
   let testToken: TestToken;
   let moduleRegistry: ModuleRegistry;
   let collectNFT: CustomCollectNFT;
+  let mockLensHub: MockLensHub;
 
   let lensHubAddress: string;
   let authorAddress: string;
@@ -35,6 +36,9 @@ describe("AuctionActionModule", () => {
     await testToken.mint(firstBidderAddress, ethers.parseEther("10"));
     await testToken.mint(secondBidderAddress, ethers.parseEther("10"));
 
+    const LensHub = await ethers.getContractFactory("MockLensHub");
+    mockLensHub = await LensHub.deploy(lensHubAddress, 1000);
+
     // Deploy a new mock ModuleRegistry contract
     const ModuleRegistry = await ethers.getContractFactory("ModuleRegistry");
     moduleRegistry = await ModuleRegistry.deploy();
@@ -48,6 +52,7 @@ describe("AuctionActionModule", () => {
     const AuctionActionModule = await ethers.getContractFactory("AuctionActionModule");
     auctionAction = await AuctionActionModule.deploy(
       lensHubAddress,
+      await mockLensHub.getAddress(),
       await moduleRegistry.getAddress(),
       await collectNFT.getAddress(),
     );
