@@ -378,11 +378,9 @@ describe("AuctionActionModule", () => {
 
   it("Start time is working correctly", async () => {
     //set time now + 120 seconds
-    const startTimestamp = Math.floor(Date.now() / 1000);
-    console.log("startTimestamp", startTimestamp);
-    console.log("startTimestamp+", startTimestamp + 100);
+    const startTimestamp = Math.floor(Date.now() / 1000) + 100;
 
-    await initialize("", startTimestamp, 30, 300);
+    await initialize("", startTimestamp, 60, 300);
 
     const amount = ethers.parseEther("0.001");
     const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
@@ -401,23 +399,22 @@ describe("AuctionActionModule", () => {
     await expect(toEarlyBidTx).to.revertedWithCustomError(auctionAction, "UnavailableAuction");
 
     // // Increase time to go to start of auction
-    await ethers.provider.send("evm_increaseTime", [101]);
+    await ethers.provider.send("evm_setNextBlockTimestamp", [startTimestamp + 50]);
     await ethers.provider.send("evm_mine", []);
 
     //expect to work...
-    // const onTimeBid =  auctionAction.processPublicationAction({
-    //   publicationActedProfileId: PROFILE_ID,
-    //   publicationActedId: PUBLICATION_ID,
-    //   actorProfileId: FIRST_BIDDER_PROFILE_ID,
-    //   actorProfileOwner: firstBidderAddress,
-    //   transactionExecutor: firstBidderAddress,
-    //   referrerProfileIds: [],
-    //   referrerPubIds: [],
-    //   referrerPubTypes: [],
-    //   actionModuleData: data,
-    // });
-    // await expect(onTimeBid)
-    // .to.emit(auctionAction, "BidPlaced")
+    const onTimeBid = auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: data,
+    });
+    await expect(onTimeBid).to.emit(auctionAction, "BidPlaced");
   });
 
   it("Time after last bid is working correctly", async () => {
