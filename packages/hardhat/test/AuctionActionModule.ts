@@ -10,15 +10,15 @@ import {
 import getNextContractAddress from "../lib/get-next-contract-address";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 
+//In progress, checking needed
+// - setting specific start timestamp ---working for to early not working. But not after?
+
 //Todo
 // - referrals
 // - attempting to use wrong/unsupported currency
 // - ensure winner has NFT in wallet after claiming
-// - time after last bid is working properly
-// - setting specific start timestamp
 // - reserve price is met
 // - follower-only bidding
-// - reverse of existing tests (eg winner cannot claim before auction ends)
 
 describe("AuctionActionModule", () => {
   const PROFILE_ID = 1;
@@ -484,5 +484,63 @@ describe("AuctionActionModule", () => {
     });
 
     await expect(toLateBidTx).to.revertedWithCustomError(auctionAction, "UnavailableAuction");
+  });
+
+  it("Highest bid winner cannot claim before end auction", async () => {
+    await initialize();
+
+    const amount = ethers.parseEther("0.001");
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const firstBidTx = auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: data,
+    });
+
+    await expect(firstBidTx).emit(auctionAction, "BidPlaced");
+
+    const claimTx = auctionAction.claim(PROFILE_ID, PUBLICATION_ID);
+    await expect(claimTx).to.revertedWithCustomError(auctionAction, "OngoingAuction");
+
+    const amountSecond = ethers.parseEther("0.002");
+    const dataSecond = ethers.AbiCoder.defaultAbiCoder().encode(
+      ["uint256", "uint256"],
+      [amountSecond, SECOND_BIDDER_PROFILE_ID],
+    );
+    const secondBidTx = auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: SECOND_BIDDER_PROFILE_ID,
+      actorProfileOwner: secondBidderAddress,
+      transactionExecutor: secondBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: dataSecond,
+    });
+
+    await expect(secondBidTx).emit(auctionAction, "BidPlaced");
+
+    const claimTxSecond = auctionAction.claim(PROFILE_ID, PUBLICATION_ID);
+    await expect(claimTxSecond).to.revertedWithCustomError(auctionAction, "OngoingAuction");
+
+    // Increase time to go to end auction
+    await ethers.provider.send("evm_increaseTime", [61]);
+    await ethers.provider.send("evm_mine", []);
+
+    // Ensure the bidder is now the winner
+    const auctionData = await auctionAction.getAuctionData(PROFILE_ID, PUBLICATION_ID);
+    expect(auctionData.winner.profileOwner).to.equal(secondBidderAddress);
+
+    const claimTxDone = auctionAction.claim(PROFILE_ID, PUBLICATION_ID);
+    await expect(claimTxDone)
+      .to.emit(auctionAction, "Collected")
+      .withArgs(PROFILE_ID, PUBLICATION_ID, SECOND_BIDDER_PROFILE_ID, secondBidderAddress, anyValue, 1, anyValue);
   });
 });
