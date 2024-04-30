@@ -378,14 +378,14 @@ describe("AuctionActionModule", () => {
 
   it("Start time is working correctly", async () => {
     //set time now + 120 seconds
-    const startTimestamp = Math.floor(Date.now() / 1000) + 120;
+    const startTimestamp = Math.floor(Date.now() / 1000);
     console.log("startTimestamp", startTimestamp);
+    console.log("startTimestamp+", startTimestamp + 100);
 
     await initialize("", startTimestamp, 30, 300);
 
     const amount = ethers.parseEther("0.001");
     const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
-
     const toEarlyBidTx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
       publicationActedId: PUBLICATION_ID,
@@ -400,11 +400,12 @@ describe("AuctionActionModule", () => {
 
     await expect(toEarlyBidTx).to.revertedWithCustomError(auctionAction, "UnavailableAuction");
 
-    // // Increase time to end the auction
-    // await ethers.provider.send("evm_increaseTime", [121]);
-    // await ethers.provider.send("evm_mine", []);
+    // // Increase time to go to start of auction
+    await ethers.provider.send("evm_increaseTime", [101]);
+    await ethers.provider.send("evm_mine", []);
 
-    // const onTimeBid = auctionAction.processPublicationAction({
+    //expect to work...
+    // const onTimeBid =  auctionAction.processPublicationAction({
     //   publicationActedProfileId: PROFILE_ID,
     //   publicationActedId: PUBLICATION_ID,
     //   actorProfileId: FIRST_BIDDER_PROFILE_ID,
@@ -415,8 +416,73 @@ describe("AuctionActionModule", () => {
     //   referrerPubTypes: [],
     //   actionModuleData: data,
     // });
-
     // await expect(onTimeBid)
     // .to.emit(auctionAction, "BidPlaced")
+  });
+
+  it("Time after last bid is working correctly", async () => {
+    await initialize();
+
+    const amount = ethers.parseEther("0.001");
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const firstBidTx = auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: data,
+    });
+
+    await expect(firstBidTx).emit(auctionAction, "BidPlaced");
+
+    // // Increase time to go to near end of auction
+    await ethers.provider.send("evm_increaseTime", [50]);
+    await ethers.provider.send("evm_mine", []);
+
+    const amountSecond = ethers.parseEther("0.002");
+    const datasecond = ethers.AbiCoder.defaultAbiCoder().encode(
+      ["uint256", "uint256"],
+      [amountSecond, FIRST_BIDDER_PROFILE_ID],
+    );
+    const lastBidTx = auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: datasecond,
+    });
+
+    await expect(lastBidTx).emit(auctionAction, "BidPlaced");
+
+    // Increase time to go to after auction
+    await ethers.provider.send("evm_increaseTime", [61]);
+    await ethers.provider.send("evm_mine", []);
+
+    const amountThird = ethers.parseEther("0.003");
+    const datathird = ethers.AbiCoder.defaultAbiCoder().encode(
+      ["uint256", "uint256"],
+      [amountThird, FIRST_BIDDER_PROFILE_ID],
+    );
+    const toLateBidTx = auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: datathird,
+    });
+
+    await expect(toLateBidTx).to.revertedWithCustomError(auctionAction, "UnavailableAuction");
   });
 });
