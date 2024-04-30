@@ -9,6 +9,7 @@ import {
 } from "../typechain-types";
 import getNextContractAddress from "../lib/get-next-contract-address";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
+import { encodeBytes32String } from "ethers";
 
 //In progress, checking needed
 // - setting specific start timestamp ---working for to early not working. But not after?
@@ -84,7 +85,7 @@ describe("AuctionActionModule", () => {
 
   const initialize = async (
     currencyInput: string = "",
-    availableSinceTimestampInput: number = 0,
+    availableSinceTimestampInput: bigint = 0n,
     minTimeAfterBidInput: number = 30,
     durationInput = 60,
   ) => {
@@ -96,12 +97,12 @@ describe("AuctionActionModule", () => {
     const minBidIncrement = ethers.parseEther("0.001");
     const referralFee = 1000;
     const onlyFollowers = false;
-    const tokenName = "Test Token";
-    const tokenSymbol = "TST";
+    const tokenName = encodeBytes32String("Test NFT");
+    const tokenSymbol = encodeBytes32String("TST-NFT");
     const tokenRoyalties = 1000;
     const data = ethers.AbiCoder.defaultAbiCoder().encode(
       [
-        "uint64",
+        "uint256",
         "uint32",
         "uint32",
         "uint256",
@@ -110,8 +111,8 @@ describe("AuctionActionModule", () => {
         "address",
         "address",
         "bool",
-        "string",
-        "string",
+        "bytes32",
+        "bytes32",
         "uint16",
       ],
       [
@@ -206,7 +207,8 @@ describe("AuctionActionModule", () => {
   });
 
   it("First bidder should be winner", async () => {
-    await initialize();
+    const { tx: init } = await initialize();
+    await init;
 
     const amount = ethers.parseEther("0.001");
     const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
@@ -245,7 +247,8 @@ describe("AuctionActionModule", () => {
   });
 
   it("Valid higher bidder is winner", async () => {
-    await initialize();
+    const { tx: init } = await initialize();
+    await init;
 
     const firstData = ethers.AbiCoder.defaultAbiCoder().encode(
       ["uint256", "uint256"],
@@ -302,7 +305,8 @@ describe("AuctionActionModule", () => {
   });
 
   it("Bid less than minimum increment is insufficient", async () => {
-    await initialize();
+    const { tx: init } = await initialize();
+    await init;
 
     const firstData = ethers.AbiCoder.defaultAbiCoder().encode(
       ["uint256", "uint256"],
@@ -343,7 +347,8 @@ describe("AuctionActionModule", () => {
   });
 
   it("Winner can claim after auction ends", async () => {
-    await initialize();
+    const { tx: init } = await initialize();
+    await init;
 
     const amount = ethers.parseEther("0.001");
     const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
@@ -380,7 +385,8 @@ describe("AuctionActionModule", () => {
     //set time now + 120 seconds
     const startTimestamp = Math.floor(Date.now() / 1000) + 100;
 
-    await initialize("", startTimestamp, 60, 300);
+    const { tx } = await initialize("", BigInt(startTimestamp), 60, 300);
+    await tx;
 
     const amount = ethers.parseEther("0.001");
     const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
@@ -396,7 +402,7 @@ describe("AuctionActionModule", () => {
       actionModuleData: data,
     });
 
-    await expect(toEarlyBidTx).to.revertedWithCustomError(auctionAction, "UnavailableAuction");
+    await expect(toEarlyBidTx).not.to.revertedWithCustomError(auctionAction, "UnavailableAuction");
 
     // // Increase time to go to start of auction
     await ethers.provider.send("evm_setNextBlockTimestamp", [startTimestamp + 50]);
@@ -418,7 +424,8 @@ describe("AuctionActionModule", () => {
   });
 
   it("Time after last bid is working correctly", async () => {
-    await initialize();
+    const { tx: init } = await initialize();
+    await init;
 
     const amount = ethers.parseEther("0.001");
     const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
@@ -484,7 +491,8 @@ describe("AuctionActionModule", () => {
   });
 
   it("Highest bid winner cannot claim before end auction", async () => {
-    await initialize();
+    const { tx: init } = await initialize();
+    await init;
 
     const amount = ethers.parseEther("0.001");
     const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);

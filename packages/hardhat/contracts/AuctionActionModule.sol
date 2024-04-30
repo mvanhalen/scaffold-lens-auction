@@ -42,8 +42,8 @@ struct Winner {
  * @param royalty The royalty percentage in basis points.
  */
 struct TokenData {
-    string name;
-    string symbol;
+    bytes32 name;
+    bytes32 symbol;
     uint16 royalty;
 }
 
@@ -70,7 +70,7 @@ struct TokenData {
  * @param tokenData The data to create the ERC-721 token.
  */
 struct AuctionData {
-    uint64 availableSinceTimestamp;
+    uint256 availableSinceTimestamp;
     uint64 startTimestamp;
     uint32 duration;
     uint32 minTimeAfterBid;
@@ -89,7 +89,7 @@ struct AuctionData {
 }
 
 struct InitAuctionData {
-    uint64 availableSinceTimestamp;
+    uint256 availableSinceTimestamp;
     uint32 duration;
     uint32 minTimeAfterBid;
     uint256 reservePrice;
@@ -98,8 +98,8 @@ struct InitAuctionData {
     address currency;
     address recipient;
     bool onlyFollowers;
-    string tokenName;
-    string tokenSymbol;
+    bytes32 tokenName;
+    bytes32 tokenSymbol;
     uint16 tokenRoyalty;
 }
 
@@ -144,7 +144,7 @@ contract AuctionActionModule is
     event AuctionCreated(
         uint256 indexed profileId,
         uint256 indexed pubId,
-        uint64 availableSinceTimestamp,
+        uint256 availableSinceTimestamp,
         uint32 duration,
         uint32 minTimeAfterBid,
         uint256 reservePrice,
@@ -153,8 +153,8 @@ contract AuctionActionModule is
         address currency,
         address recipient,
         bool onlyFollowers,
-        string tokenName,
-        string tokenSymbol,
+        bytes32 tokenName,
+        bytes32 tokenSymbol,
         uint16 tokenRoyalty
     );
 
@@ -334,6 +334,16 @@ contract AuctionActionModule is
         return _auctionDataByPubByProfile[profileId][pubId];
     }
 
+    function bytes32ToString(
+        bytes32 _bytes32
+    ) public pure returns (string memory) {
+        bytes memory bytesArray = new bytes(32);
+        for (uint256 i; i < 32; i++) {
+            bytesArray[i] = _bytes32[i];
+        }
+        return string(bytesArray);
+    }
+
     function _deployCollectNFT(
         uint256 profileId,
         uint256 pubId,
@@ -347,8 +357,8 @@ contract AuctionActionModule is
         ICustomCollectNFT(collectNFT).initialize(
             profileId,
             pubId,
-            auction.tokenData.name,
-            auction.tokenData.symbol,
+            bytes32ToString(auction.tokenData.name),
+            bytes32ToString(auction.tokenData.symbol),
             auction.tokenData.royalty
         );
         emit CollectNFTDeployed(profileId, pubId, collectNFT, block.timestamp);
