@@ -21,10 +21,30 @@ import {FollowValidationLib} from "lens-modules/contracts/modules/libraries/Foll
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {ICustomCollectNFT} from "./interfaces/ICustomCollectNFT.sol";
 
+/**
+ * @notice A struct containing winner data.
+ *
+ * @param profileId The token ID of the profile that is winning the auction.
+ * @param profileOwner The owner's address of the profile that is winning the auction.
+ * @param transactionExecutor The address executing the bid.
+ */
 struct Winner {
     uint256 profileId;
     address profileOwner;
     address transactionExecutor;
+}
+
+/**
+ * @notice A struct containing the necessary data to create an ERC-721.
+ *
+ * @param name The name of the token.
+ * @param symbol The symbol of the token.
+ * @param royalty The royalty percentage in basis points.
+ */
+struct TokenData {
+    string name;
+    string symbol;
+    uint16 royalty;
 }
 
 /**
@@ -47,9 +67,7 @@ struct Winner {
  * @param onlyFollowers Indicates whether followers are the only allowed to bid, and collect, or not.
  * @param collected Indicates whether the publication has been collected or not.
  * @param feeProcessed Indicates whether the auction fee was already processed or not.
- * @param tokenName The name of the token.
- * @param tokenSymbol The symbol of the token.
- * @param tokenRoyalty The royalty percentage.
+ * @param tokenData The data to create the ERC-721 token.
  */
 struct AuctionData {
     uint64 availableSinceTimestamp;
@@ -67,6 +85,19 @@ struct AuctionData {
     bool onlyFollowers;
     bool collected;
     bool feeProcessed;
+    TokenData tokenData;
+}
+
+struct InitAuctionData {
+    uint64 availableSinceTimestamp;
+    uint32 duration;
+    uint32 minTimeAfterBid;
+    uint256 reservePrice;
+    uint256 minBidIncrement;
+    uint16 referralFee;
+    address currency;
+    address recipient;
+    bool onlyFollowers;
     string tokenName;
     string tokenSymbol;
     uint16 tokenRoyalty;
@@ -239,60 +270,19 @@ contract AuctionActionModule is
             transactionExecutor,
             data
         );
-        (
-            uint64 availableSinceTimestamp,
-            uint32 duration,
-            uint32 minTimeAfterBid,
-            uint256 reservePrice,
-            uint256 minBidIncrement,
-            uint16 referralFee,
-            address currency,
-            address recipient,
-            bool onlyFollowers,
-            string memory tokenName,
-            string memory tokenSymbol,
-            uint16 tokenRoyalty
-        ) = abi.decode(
-                data,
-                (
-                    uint64,
-                    uint32,
-                    uint32,
-                    uint256,
-                    uint256,
-                    uint16,
-                    address,
-                    address,
-                    bool,
-                    string,
-                    string,
-                    uint16
-                )
-            );
+
+        InitAuctionData memory initData = abi.decode(data, (InitAuctionData));
+
         if (
-            duration == 0 ||
-            duration < minTimeAfterBid ||
-            !MODULE_REGISTRY.isErc20CurrencyRegistered(currency) ||
-            referralFee > BPS_MAX
+            initData.duration == 0 ||
+            initData.duration < initData.minTimeAfterBid ||
+            !MODULE_REGISTRY.isErc20CurrencyRegistered(initData.currency) ||
+            initData.referralFee > BPS_MAX
         ) {
             revert Errors.InitParamsInvalid();
         }
-        _initAuction(
-            profileId,
-            pubId,
-            availableSinceTimestamp,
-            duration,
-            minTimeAfterBid,
-            reservePrice,
-            minBidIncrement,
-            referralFee,
-            currency,
-            recipient,
-            onlyFollowers,
-            tokenName,
-            tokenSymbol,
-            tokenRoyalty
-        );
+
+        _initAuction(profileId, pubId, initData);
         return data;
     }
 
@@ -357,9 +347,9 @@ contract AuctionActionModule is
         ICustomCollectNFT(collectNFT).initialize(
             profileId,
             pubId,
-            auction.tokenName,
-            auction.tokenSymbol,
-            auction.tokenRoyalty
+            auction.tokenData.name,
+            auction.tokenData.symbol,
+            auction.tokenData.royalty
         );
         emit CollectNFTDeployed(profileId, pubId, collectNFT, block.timestamp);
 
@@ -522,70 +512,48 @@ contract AuctionActionModule is
      *
      * @param profileId The token ID of the profile associated with the underlying publication.
      * @param pubId The publication ID associated with the underlying publication.
-     * @param availableSinceTimestamp The UNIX timestamp after bids can start to be placed.
-     * @param duration The seconds that the auction will last after the first bid has been placed.
-     * @param minTimeAfterBid The minimum time, in seconds, that must always remain between last bid's timestamp
-     * and `endTimestamp`. This restriction could make `endTimestamp` to be re-computed and updated.
-     * @param reservePrice The minimum bid price accepted.
-     * @param minBidIncrement The minimum amount by which a new bid must overcome the last bid.
-     * @param referralFee The percentage of the fee that will be transferred to the referrer in case of having one.
-     * Measured in basis points, each basis point represents 0.01%.
-     * @param currency The currency in which the bids are denominated.
-     * @param recipient The recipient of the auction's winner bid amount.
-     * @param onlyFollowers Indicates whether followers are the only allowed to bid, and collect, or not.
-     * @param tokenName The name of the token.
-     * @param tokenSymbol The symbol of the token.
-     * @param tokenRoyalty The royalty percentage.
+     * @param initData The auction initialization data.
      */
     function _initAuction(
         uint256 profileId,
         uint256 pubId,
-        uint64 availableSinceTimestamp,
-        uint32 duration,
-        uint32 minTimeAfterBid,
-        uint256 reservePrice,
-        uint256 minBidIncrement,
-        uint16 referralFee,
-        address currency,
-        address recipient,
-        bool onlyFollowers,
-        string memory tokenName,
-        string memory tokenSymbol,
-        uint16 tokenRoyalty
+        InitAuctionData memory initData
     ) internal {
-        _verifyErc20Currency(currency);
+        _verifyErc20Currency(initData.currency);
 
         AuctionData storage auction = _auctionDataByPubByProfile[profileId][
             pubId
         ];
-        auction.availableSinceTimestamp = availableSinceTimestamp;
-        auction.duration = duration;
-        auction.minTimeAfterBid = minTimeAfterBid;
-        auction.reservePrice = reservePrice;
-        auction.minBidIncrement = minBidIncrement;
-        auction.referralFee = referralFee;
-        auction.currency = currency;
-        auction.recipient = recipient;
-        auction.onlyFollowers = onlyFollowers;
-        auction.tokenName = tokenName;
-        auction.tokenSymbol = tokenSymbol;
-        auction.tokenRoyalty = tokenRoyalty;
+        auction.availableSinceTimestamp = initData.availableSinceTimestamp;
+        auction.duration = initData.duration;
+        auction.minTimeAfterBid = initData.minTimeAfterBid;
+        auction.reservePrice = initData.reservePrice;
+        auction.minBidIncrement = initData.minBidIncrement;
+        auction.referralFee = initData.referralFee;
+        auction.currency = initData.currency;
+        auction.recipient = initData.recipient;
+        auction.onlyFollowers = initData.onlyFollowers;
+        auction.tokenData = TokenData(
+            initData.tokenName,
+            initData.tokenSymbol,
+            initData.tokenRoyalty
+        );
 
         emit AuctionCreated(
             profileId,
             pubId,
-            availableSinceTimestamp,
-            duration,
-            minTimeAfterBid,
-            reservePrice,
-            minBidIncrement,
-            referralFee,
-            currency,
-            recipient,
-            onlyFollowers,
-            tokenName,
-            tokenSymbol,
-            tokenRoyalty
+            initData.availableSinceTimestamp,
+            initData.duration,
+            initData.minTimeAfterBid,
+            initData.reservePrice,
+            initData.minBidIncrement,
+            initData.referralFee,
+            initData.currency,
+            initData.recipient,
+            initData.onlyFollowers,
+            initData.tokenName,
+            initData.tokenSymbol,
+            initData.tokenRoyalty
         );
     }
 

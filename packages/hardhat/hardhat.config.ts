@@ -39,7 +39,6 @@ const config: HardhatUserConfig = {
           "*": ["storageLayout"],
         },
       },
-      viaIR: true,
     },
   },
   dependencyCompiler: {
