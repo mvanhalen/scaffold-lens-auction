@@ -12,7 +12,7 @@ const deployCollectNFT: DeployFunction = async function (hre: HardhatRuntimeEnvi
   // Predict the Action address because of circular dependency
   const auctionActionAddress = await getNextContractAddress(deployer);
 
-  await deploy("CollectNFT", {
+  await deploy("CustomCollectNFT", {
     from: deployer,
     args: [lensHubAddress, auctionActionAddress],
     log: true,

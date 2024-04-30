@@ -3,28 +3,48 @@
 pragma solidity 0.8.23;
 
 import {IModuleRegistry} from "lens-modules/contracts/interfaces/IModuleRegistry.sol";
-import {Types} from 'lens-modules/contracts/libraries/constants/Types.sol';
-import {Errors} from 'lens-modules/contracts/libraries/constants/Errors.sol';
+import {Types} from "lens-modules/contracts/libraries/constants/Types.sol";
+import {Errors} from "lens-modules/contracts/libraries/constants/Errors.sol";
 import {IPublicationActionModule} from "lens-modules/contracts/interfaces/IPublicationActionModule.sol";
-import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
-import {IERC721} from '@openzeppelin/contracts/token/ERC721/IERC721.sol';
-import {IERC721Timestamped} from 'lens-modules/contracts/interfaces/IERC721Timestamped.sol';
-import {ILensHub} from 'lens-modules/contracts/interfaces/ILensHub.sol';
-import {LensModule} from 'lens-modules/contracts/modules/LensModule.sol';
-import {LensModuleMetadata} from 'lens-modules/contracts/modules/LensModuleMetadata.sol';
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import {IERC721Timestamped} from "lens-modules/contracts/interfaces/IERC721Timestamped.sol";
+import {ILensGovernable} from "lens-modules/contracts/interfaces/ILensGovernable.sol";
+import {LensModule} from "lens-modules/contracts/modules/LensModule.sol";
+import {LensModuleMetadata} from "lens-modules/contracts/modules/LensModuleMetadata.sol";
 import {LensModuleRegistrant} from "lens-modules/contracts/modules/base/LensModuleRegistrant.sol";
 import {HubRestricted} from "lens-modules/contracts/base/HubRestricted.sol";
-import {SafeERC20} from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ModuleTypes} from "lens-modules/contracts/modules/libraries/constants/ModuleTypes.sol";
 import {FollowValidationLib} from "lens-modules/contracts/modules/libraries/FollowValidationLib.sol";
-import {ICollectNFT} from "lens-modules/contracts/interfaces/ICollectNFT.sol";
-import {Clones} from '@openzeppelin/contracts/proxy/Clones.sol';
+import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
+import {ICustomCollectNFT} from "./interfaces/ICustomCollectNFT.sol";
 
+/**
+ * @notice A struct containing winner data.
+ *
+ * @param profileId The token ID of the profile that is winning the auction.
+ * @param profileOwner The owner's address of the profile that is winning the auction.
+ * @param transactionExecutor The address executing the bid.
+ */
 struct Winner {
     uint256 profileId;
     address profileOwner;
     address transactionExecutor;
+}
+
+/**
+ * @notice A struct containing the necessary data to create an ERC-721.
+ *
+ * @param name The name of the token.
+ * @param symbol The symbol of the token.
+ * @param royalty The royalty percentage in basis points.
+ */
+struct TokenData {
+    string name;
+    string symbol;
+    uint16 royalty;
 }
 
 /**
@@ -47,6 +67,7 @@ struct Winner {
  * @param onlyFollowers Indicates whether followers are the only allowed to bid, and collect, or not.
  * @param collected Indicates whether the publication has been collected or not.
  * @param feeProcessed Indicates whether the auction fee was already processed or not.
+ * @param tokenData The data to create the ERC-721 token.
  */
 struct AuctionData {
     uint64 availableSinceTimestamp;
@@ -64,6 +85,22 @@ struct AuctionData {
     bool onlyFollowers;
     bool collected;
     bool feeProcessed;
+    TokenData tokenData;
+}
+
+struct InitAuctionData {
+    uint64 availableSinceTimestamp;
+    uint32 duration;
+    uint32 minTimeAfterBid;
+    uint256 reservePrice;
+    uint256 minBidIncrement;
+    uint16 referralFee;
+    address currency;
+    address recipient;
+    bool onlyFollowers;
+    string tokenName;
+    string tokenSymbol;
+    uint16 tokenRoyalty;
 }
 
 error ModuleDataMismatch();
@@ -115,7 +152,10 @@ contract AuctionActionModule is
         uint16 referralFee,
         address currency,
         address recipient,
-        bool onlyFollowers
+        bool onlyFollowers,
+        string tokenName,
+        string tokenSymbol,
+        uint16 tokenRoyalty
     );
 
     event BidPlaced(
@@ -174,11 +214,13 @@ contract AuctionActionModule is
     );
 
     address public immutable COLLECT_NFT_IMPL;
+    address public immutable TREASURY;
 
-    mapping(uint256 profileId => mapping(uint256 pubId => address collectNFT)) internal _collectNFTByPub;
+    mapping(uint256 profileId => mapping(uint256 pubId => address collectNFT))
+        internal _collectNFTByPub;
 
     mapping(uint256 => mapping(uint256 => AuctionData))
-    internal _auctionDataByPubByProfile;
+        internal _auctionDataByPubByProfile;
 
     /**
      * @dev Maps a given bidder's address to its referrer profile ID. Referrer matching publication's profile ID means
@@ -186,18 +228,20 @@ contract AuctionActionModule is
      * The referrer is set through, and only through, the first bidder's bid on each auction.
      */
     mapping(uint256 => mapping(uint256 => mapping(address => uint256)))
-    internal _referrerProfileIdByPubByProfile;
+        internal _referrerProfileIdByPubByProfile;
 
     constructor(
         address hub,
+        address treasury,
         IModuleRegistry moduleRegistry,
         address collectNFTImpl
     )
-    Ownable()
-    HubRestricted(hub)
-    LensModuleMetadata()
-    LensModuleRegistrant(moduleRegistry)
+        Ownable()
+        HubRestricted(hub)
+        LensModuleMetadata()
+        LensModuleRegistrant(moduleRegistry)
     {
+        TREASURY = treasury;
         COLLECT_NFT_IMPL = collectNFTImpl;
     }
 
@@ -226,51 +270,19 @@ contract AuctionActionModule is
             transactionExecutor,
             data
         );
-        (
-            uint64 availableSinceTimestamp,
-            uint32 duration,
-            uint32 minTimeAfterBid,
-            uint256 reservePrice,
-            uint256 minBidIncrement,
-            uint16 referralFee,
-            address currency,
-            address recipient,
-            bool onlyFollowers
-        ) = abi.decode(
-            data,
-            (
-                uint64,
-                uint32,
-                uint32,
-                uint256,
-                uint256,
-                uint16,
-                address,
-                address,
-                bool
-            )
-        );
+
+        InitAuctionData memory initData = abi.decode(data, (InitAuctionData));
+
         if (
-            duration == 0 ||
-            duration < minTimeAfterBid ||
-            !MODULE_REGISTRY.isErc20CurrencyRegistered(currency) ||
-            referralFee > BPS_MAX
+            initData.duration == 0 ||
+            initData.duration < initData.minTimeAfterBid ||
+            !MODULE_REGISTRY.isErc20CurrencyRegistered(initData.currency) ||
+            initData.referralFee > BPS_MAX
         ) {
             revert Errors.InitParamsInvalid();
         }
-        _initAuction(
-            profileId,
-            pubId,
-            availableSinceTimestamp,
-            duration,
-            minTimeAfterBid,
-            reservePrice,
-            minBidIncrement,
-            referralFee,
-            currency,
-            recipient,
-            onlyFollowers
-        );
+
+        _initAuction(profileId, pubId, initData);
         return data;
     }
 
@@ -289,15 +301,9 @@ contract AuctionActionModule is
             params.actionModuleData
         );
 
-        (
-            uint256 amount,
-            uint256 bidderProfileId
-        ) = abi.decode(
+        (uint256 amount, uint256 bidderProfileId) = abi.decode(
             params.actionModuleData,
-            (
-                uint256,
-                uint256
-            )
+            (uint256, uint256)
         );
 
         _bid(
@@ -328,10 +334,23 @@ contract AuctionActionModule is
         return _auctionDataByPubByProfile[profileId][pubId];
     }
 
-    function _deployCollectNFT(uint256 profileId, uint256 pubId, address collectNFTImpl) private returns (address) {
+    function _deployCollectNFT(
+        uint256 profileId,
+        uint256 pubId,
+        address collectNFTImpl
+    ) private returns (address) {
         address collectNFT = Clones.clone(collectNFTImpl);
+        AuctionData storage auction = _auctionDataByPubByProfile[profileId][
+            pubId
+        ];
 
-        ICollectNFT(collectNFT).initialize(profileId, pubId);
+        ICustomCollectNFT(collectNFT).initialize(
+            profileId,
+            pubId,
+            auction.tokenData.name,
+            auction.tokenData.symbol,
+            auction.tokenData.royalty
+        );
         emit CollectNFTDeployed(profileId, pubId, collectNFT, block.timestamp);
 
         return collectNFT;
@@ -342,15 +361,26 @@ contract AuctionActionModule is
         uint256 publicationCollectedId,
         address collectNFTImpl
     ) private returns (address) {
-        address collectNFT = _collectNFTByPub[publicationCollectedProfileId][publicationCollectedId];
+        address collectNFT = _collectNFTByPub[publicationCollectedProfileId][
+            publicationCollectedId
+        ];
         if (collectNFT == address(0)) {
-            collectNFT = _deployCollectNFT(publicationCollectedProfileId, publicationCollectedId, collectNFTImpl);
-            _collectNFTByPub[publicationCollectedProfileId][publicationCollectedId] = collectNFT;
+            collectNFT = _deployCollectNFT(
+                publicationCollectedProfileId,
+                publicationCollectedId,
+                collectNFTImpl
+            );
+            _collectNFTByPub[publicationCollectedProfileId][
+                publicationCollectedId
+            ] = collectNFT;
         }
         return collectNFT;
     }
 
-    function getCollectNFT(uint256 profileId, uint256 pubId) external view returns (address) {
+    function getCollectNFT(
+        uint256 profileId,
+        uint256 pubId
+    ) external view returns (address) {
         return _collectNFTByPub[profileId][pubId];
     }
 
@@ -368,22 +398,31 @@ contract AuctionActionModule is
     ) external {
         if (
             block.timestamp <
-            _auctionDataByPubByProfile[collectedProfileId][collectedPubId].availableSinceTimestamp
+            _auctionDataByPubByProfile[collectedProfileId][collectedPubId]
+                .availableSinceTimestamp
         ) {
             revert UnavailableAuction();
         }
         if (
-            _auctionDataByPubByProfile[collectedProfileId][collectedPubId].startTimestamp == 0 ||
+            _auctionDataByPubByProfile[collectedProfileId][collectedPubId]
+                .startTimestamp ==
+            0 ||
             block.timestamp <=
-            _auctionDataByPubByProfile[collectedProfileId][collectedPubId].endTimestamp
+            _auctionDataByPubByProfile[collectedProfileId][collectedPubId]
+                .endTimestamp
         ) {
             revert OngoingAuction();
         }
-        if (_auctionDataByPubByProfile[collectedProfileId][collectedPubId].collected) {
+        if (
+            _auctionDataByPubByProfile[collectedProfileId][collectedPubId]
+                .collected
+        ) {
             revert CollectAlreadyProcessed();
         }
 
-        Winner storage winner = _auctionDataByPubByProfile[collectedProfileId][collectedPubId].winner;
+        Winner storage winner = _auctionDataByPubByProfile[collectedProfileId][
+            collectedPubId
+        ].winner;
 
         address collectNFT = _getOrDeployCollectNFT({
             publicationCollectedProfileId: collectedProfileId,
@@ -391,10 +430,16 @@ contract AuctionActionModule is
             collectNFTImpl: COLLECT_NFT_IMPL
         });
 
-        uint256 tokenId = ICollectNFT(collectNFT).mint(winner.profileOwner);
+        uint256 tokenId = ICustomCollectNFT(collectNFT).mint(
+            winner.profileOwner
+        );
 
-        _auctionDataByPubByProfile[collectedProfileId][collectedPubId].collected = true;
-        if (!_auctionDataByPubByProfile[collectedProfileId][collectedPubId].feeProcessed) {
+        _auctionDataByPubByProfile[collectedProfileId][collectedPubId]
+            .collected = true;
+        if (
+            !_auctionDataByPubByProfile[collectedProfileId][collectedPubId]
+                .feeProcessed
+        ) {
             _processCollectFee(collectedProfileId, collectedPubId);
         }
 
@@ -455,8 +500,8 @@ contract AuctionActionModule is
         address bidder
     ) external view returns (uint256) {
         uint256 referrerProfileId = _referrerProfileIdByPubByProfile[profileId][
-                    pubId
-            ][bidder];
+            pubId
+        ][bidder];
         return referrerProfileId == profileId ? 0 : referrerProfileId;
     }
 
@@ -467,57 +512,48 @@ contract AuctionActionModule is
      *
      * @param profileId The token ID of the profile associated with the underlying publication.
      * @param pubId The publication ID associated with the underlying publication.
-     * @param availableSinceTimestamp The UNIX timestamp after bids can start to be placed.
-     * @param duration The seconds that the auction will last after the first bid has been placed.
-     * @param minTimeAfterBid The minimum time, in seconds, that must always remain between last bid's timestamp
-     * and `endTimestamp`. This restriction could make `endTimestamp` to be re-computed and updated.
-     * @param reservePrice The minimum bid price accepted.
-     * @param minBidIncrement The minimum amount by which a new bid must overcome the last bid.
-     * @param referralFee The percentage of the fee that will be transferred to the referrer in case of having one.
-     * Measured in basis points, each basis point represents 0.01%.
-     * @param currency The currency in which the bids are denominated.
-     * @param recipient The recipient of the auction's winner bid amount.
-     * @param onlyFollowers Indicates whether followers are the only allowed to bid, and collect, or not.
+     * @param initData The auction initialization data.
      */
     function _initAuction(
         uint256 profileId,
         uint256 pubId,
-        uint64 availableSinceTimestamp,
-        uint32 duration,
-        uint32 minTimeAfterBid,
-        uint256 reservePrice,
-        uint256 minBidIncrement,
-        uint16 referralFee,
-        address currency,
-        address recipient,
-        bool onlyFollowers
+        InitAuctionData memory initData
     ) internal {
-        _verifyErc20Currency(currency);
+        _verifyErc20Currency(initData.currency);
 
         AuctionData storage auction = _auctionDataByPubByProfile[profileId][
-                    pubId
-            ];
-        auction.availableSinceTimestamp = availableSinceTimestamp;
-        auction.duration = duration;
-        auction.minTimeAfterBid = minTimeAfterBid;
-        auction.reservePrice = reservePrice;
-        auction.minBidIncrement = minBidIncrement;
-        auction.referralFee = referralFee;
-        auction.currency = currency;
-        auction.recipient = recipient;
-        auction.onlyFollowers = onlyFollowers;
+            pubId
+        ];
+        auction.availableSinceTimestamp = initData.availableSinceTimestamp;
+        auction.duration = initData.duration;
+        auction.minTimeAfterBid = initData.minTimeAfterBid;
+        auction.reservePrice = initData.reservePrice;
+        auction.minBidIncrement = initData.minBidIncrement;
+        auction.referralFee = initData.referralFee;
+        auction.currency = initData.currency;
+        auction.recipient = initData.recipient;
+        auction.onlyFollowers = initData.onlyFollowers;
+        auction.tokenData = TokenData(
+            initData.tokenName,
+            initData.tokenSymbol,
+            initData.tokenRoyalty
+        );
+
         emit AuctionCreated(
             profileId,
             pubId,
-            availableSinceTimestamp,
-            duration,
-            minTimeAfterBid,
-            reservePrice,
-            minBidIncrement,
-            referralFee,
-            currency,
-            recipient,
-            onlyFollowers
+            initData.availableSinceTimestamp,
+            initData.duration,
+            initData.minTimeAfterBid,
+            initData.reservePrice,
+            initData.minBidIncrement,
+            initData.referralFee,
+            initData.currency,
+            initData.recipient,
+            initData.onlyFollowers,
+            initData.tokenName,
+            initData.tokenSymbol,
+            initData.tokenRoyalty
         );
     }
 
@@ -528,7 +564,7 @@ contract AuctionActionModule is
     }
 
     function _treasuryData() internal view returns (address, uint16) {
-        return ILensHub(HUB).getTreasuryData();
+        return ILensGovernable(TREASURY).getTreasuryData();
     }
 
     /**
@@ -543,8 +579,8 @@ contract AuctionActionModule is
     function _processCollectFee(uint256 profileId, uint256 pubId) internal {
         _auctionDataByPubByProfile[profileId][pubId].feeProcessed = true;
         uint256 referrerProfileId = _referrerProfileIdByPubByProfile[profileId][
-                    pubId
-            ][_auctionDataByPubByProfile[profileId][pubId].winner.profileOwner];
+            pubId
+        ][_auctionDataByPubByProfile[profileId][pubId].winner.profileOwner];
         if (referrerProfileId == profileId) {
             _processCollectFeeWithoutReferral(
                 _auctionDataByPubByProfile[profileId][pubId].winningBid,
@@ -644,8 +680,8 @@ contract AuctionActionModule is
         address bidderTransactionExecutor
     ) internal {
         AuctionData memory auction = _auctionDataByPubByProfile[profileId][
-                    pubId
-            ];
+            pubId
+        ];
         _validateBid(profileId, amount, bidderProfileId, auction);
         uint256 referrerProfileIdSet = _setReferrerProfileIdIfNotAlreadySet(
             profileId,
@@ -654,9 +690,9 @@ contract AuctionActionModule is
             bidderOwner
         );
         Winner memory newWinner = Winner({
-            profileOwner : bidderOwner,
-            profileId : bidderProfileId,
-            transactionExecutor : bidderTransactionExecutor
+            profileOwner: bidderOwner,
+            profileId: bidderProfileId,
+            transactionExecutor: bidderTransactionExecutor
         });
         uint256 endTimestamp = _setNewAuctionStorageStateAfterBid(
             profileId,
@@ -743,8 +779,8 @@ contract AuctionActionModule is
         AuctionData memory prevAuctionState
     ) internal returns (uint256) {
         AuctionData storage nextAuctionState = _auctionDataByPubByProfile[
-                    profileId
-            ][pubId];
+            profileId
+        ][pubId];
         nextAuctionState.winner = newWinner;
         nextAuctionState.winningBid = newWinningBid;
         uint256 endTimestamp = prevAuctionState.endTimestamp;
@@ -779,11 +815,11 @@ contract AuctionActionModule is
         address bidder
     ) internal returns (uint256) {
         uint256 referrerProfileIdSet = _referrerProfileIdByPubByProfile[
-                    profileId
-            ][pubId][bidder];
+            profileId
+        ][pubId][bidder];
         if (referrerProfileIdSet == 0) {
             _referrerProfileIdByPubByProfile[profileId][pubId][
-            bidder
+                bidder
             ] = referrerProfileId;
             referrerProfileIdSet = referrerProfileId;
         }
@@ -800,16 +836,16 @@ contract AuctionActionModule is
         AuctionData memory auction,
         uint256 amount
     ) internal pure {
-        bool auctionStartsWithCurrentBid = auction.winner.profileOwner == address(0);
+        bool auctionStartsWithCurrentBid = auction.winner.profileOwner ==
+            address(0);
         if (
             (auctionStartsWithCurrentBid && amount < auction.reservePrice) ||
             (!auctionStartsWithCurrentBid &&
-            (amount <= auction.winningBid ||
-                (auction.minBidIncrement > 0 &&
-                    amount - auction.winningBid < auction.minBidIncrement)))
+                (amount <= auction.winningBid ||
+                    (auction.minBidIncrement > 0 &&
+                        amount - auction.winningBid < auction.minBidIncrement)))
         ) {
             revert InsufficientBidAmount();
         }
     }
-
 }

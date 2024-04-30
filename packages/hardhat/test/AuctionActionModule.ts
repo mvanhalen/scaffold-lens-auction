@@ -1,6 +1,12 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { AuctionActionModule, CollectNFT, ModuleRegistry, TestToken } from "../typechain-types";
+import {
+  AuctionActionModule,
+  CustomCollectNFT,
+  MockLensGovernable,
+  ModuleRegistry,
+  TestToken,
+} from "../typechain-types";
 import getNextContractAddress from "../lib/get-next-contract-address";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 
@@ -13,7 +19,8 @@ describe("AuctionActionModule", () => {
   let auctionAction: AuctionActionModule;
   let testToken: TestToken;
   let moduleRegistry: ModuleRegistry;
-  let collectNFT: CollectNFT;
+  let collectNFT: CustomCollectNFT;
+  let mockLensGovernable: MockLensGovernable;
 
   let lensHubAddress: string;
   let authorAddress: string;
@@ -35,19 +42,23 @@ describe("AuctionActionModule", () => {
     await testToken.mint(firstBidderAddress, ethers.parseEther("10"));
     await testToken.mint(secondBidderAddress, ethers.parseEther("10"));
 
+    const LensGovernable = await ethers.getContractFactory("MockLensGovernable");
+    mockLensGovernable = await LensGovernable.deploy(lensHubAddress, 1000);
+
     // Deploy a new mock ModuleRegistry contract
     const ModuleRegistry = await ethers.getContractFactory("ModuleRegistry");
     moduleRegistry = await ModuleRegistry.deploy();
 
     await moduleRegistry.registerErc20Currency(await testToken.getAddress());
 
-    const CollectNFT = await ethers.getContractFactory("CollectNFT");
+    const CollectNFT = await ethers.getContractFactory("CustomCollectNFT");
     collectNFT = await CollectNFT.deploy(lensHubAddress, getNextContractAddress(lensHubAddress));
 
     // Deploy a new TipActionModule contract for each test
     const AuctionActionModule = await ethers.getContractFactory("AuctionActionModule");
     auctionAction = await AuctionActionModule.deploy(
       lensHubAddress,
+      await mockLensGovernable.getAddress(),
       await moduleRegistry.getAddress(),
       await collectNFT.getAddress(),
     );
@@ -70,8 +81,24 @@ describe("AuctionActionModule", () => {
     const minBidIncrement = ethers.parseEther("0.001");
     const referralFee = 1000;
     const onlyFollowers = false;
+    const tokenName = "Test Token";
+    const tokenSymbol = "TST";
+    const tokenRoyalties = 1000;
     const data = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint64", "uint32", "uint32", "uint256", "uint256", "uint16", "address", "address", "bool"],
+      [
+        "uint64",
+        "uint32",
+        "uint32",
+        "uint256",
+        "uint256",
+        "uint16",
+        "address",
+        "address",
+        "bool",
+        "string",
+        "string",
+        "uint16",
+      ],
       [
         availableSinceTimestamp,
         duration,
@@ -82,6 +109,9 @@ describe("AuctionActionModule", () => {
         currency,
         authorAddress,
         onlyFollowers,
+        tokenName,
+        tokenSymbol,
+        tokenRoyalties,
       ],
     );
     const tx = auctionAction.initializePublicationAction(PROFILE_ID, PUBLICATION_ID, authorAddress, data);
@@ -97,6 +127,9 @@ describe("AuctionActionModule", () => {
       currency,
       authorAddress,
       onlyFollowers,
+      tokenName,
+      tokenSymbol,
+      tokenRoyalties,
     };
   };
 
@@ -114,6 +147,9 @@ describe("AuctionActionModule", () => {
       currency,
       authorAddress,
       onlyFollowers,
+      tokenName,
+      tokenSymbol,
+      tokenRoyalties,
     } = await initialize();
 
     await expect(tx)
@@ -132,6 +168,9 @@ describe("AuctionActionModule", () => {
         currency,
         authorAddress,
         onlyFollowers,
+        tokenName,
+        tokenSymbol,
+        tokenRoyalties,
       );
 
     await expect(tx).not.to.revertedWithCustomError(auctionAction, "InitParamsInvalid");
