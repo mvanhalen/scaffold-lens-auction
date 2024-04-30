@@ -10,6 +10,16 @@ import {
 import getNextContractAddress from "../lib/get-next-contract-address";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 
+//Todo
+// - referrals
+// - attempting to use wrong/unsupported currency
+// - ensure winner has NFT in wallet after claiming
+// - time after last bid is working properly
+// - setting specific start timestamp
+// - reserve price is met
+// - follower-only bidding
+// - reverse of existing tests (eg winner cannot claim before auction ends)
+
 describe("AuctionActionModule", () => {
   const PROFILE_ID = 1;
   const PUBLICATION_ID = 1;
@@ -72,11 +82,16 @@ describe("AuctionActionModule", () => {
     await secondBidderTokenInstance.approve(auctionAddress, ethers.parseEther("10"));
   });
 
-  const initialize = async () => {
-    const currency = await testToken.getAddress();
-    const availableSinceTimestamp = 0;
-    const duration = 60;
-    const minTimeAfterBid = 30;
+  const initialize = async (
+    currencyInput: string = "",
+    availableSinceTimestampInput: number = 0,
+    minTimeAfterBidInput: number = 30,
+    durationInput = 60,
+  ) => {
+    const currency = currencyInput === "" ? await testToken.getAddress() : currencyInput;
+    const availableSinceTimestamp = availableSinceTimestampInput;
+    const duration = durationInput;
+    const minTimeAfterBid = minTimeAfterBidInput;
     const reservePrice = 0;
     const minBidIncrement = ethers.parseEther("0.001");
     const referralFee = 1000;
@@ -359,5 +374,49 @@ describe("AuctionActionModule", () => {
     expect(auctionData.feeProcessed).to.equal(true);
     expect(auctionData.winningBid).to.equal(amount);
     expect(auctionData.endTimestamp).not.to.equal(0);
+  });
+
+  it("Start time is working correctly", async () => {
+    //set time now + 120 seconds
+    const startTimestamp = Math.floor(Date.now() / 1000) + 120;
+    console.log("startTimestamp", startTimestamp);
+
+    await initialize("", startTimestamp, 30, 300);
+
+    const amount = ethers.parseEther("0.001");
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+
+    const toEarlyBidTx = auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: data,
+    });
+
+    await expect(toEarlyBidTx).to.revertedWithCustomError(auctionAction, "UnavailableAuction");
+
+    // // Increase time to end the auction
+    // await ethers.provider.send("evm_increaseTime", [121]);
+    // await ethers.provider.send("evm_mine", []);
+
+    // const onTimeBid = auctionAction.processPublicationAction({
+    //   publicationActedProfileId: PROFILE_ID,
+    //   publicationActedId: PUBLICATION_ID,
+    //   actorProfileId: FIRST_BIDDER_PROFILE_ID,
+    //   actorProfileOwner: firstBidderAddress,
+    //   transactionExecutor: firstBidderAddress,
+    //   referrerProfileIds: [],
+    //   referrerPubIds: [],
+    //   referrerPubTypes: [],
+    //   actionModuleData: data,
+    // });
+
+    // await expect(onTimeBid)
+    // .to.emit(auctionAction, "BidPlaced")
   });
 });
