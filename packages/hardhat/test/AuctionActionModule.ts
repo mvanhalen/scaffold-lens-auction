@@ -11,14 +11,9 @@ import getNextContractAddress from "../lib/get-next-contract-address";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { encodeBytes32String } from "ethers";
 
-//In progress, checking needed
-// - setting specific start timestamp ---working for to early not working. But not after?
-
 //Todo
 // - referrals
-// - attempting to use wrong/unsupported currency
 // - ensure winner has NFT in wallet after claiming
-// - reserve price is met
 // - follower-only bidding
 
 describe("AuctionActionModule", () => {
@@ -37,9 +32,9 @@ describe("AuctionActionModule", () => {
   let authorAddress: string;
   let firstBidderAddress: string;
   let secondBidderAddress: string;
+  let tokenAddress: string;
 
   beforeEach(async () => {
-    // Get the ContractFactory and Signers here.
     const [lensHub, author, firstBidder, secondBidder] = await ethers.getSigners();
 
     lensHubAddress = await lensHub.getAddress();
@@ -49,6 +44,7 @@ describe("AuctionActionModule", () => {
 
     const TestToken = await ethers.getContractFactory("TestToken");
     testToken = await TestToken.deploy();
+    tokenAddress = await testToken.getAddress();
 
     await testToken.mint(firstBidderAddress, ethers.parseEther("10"));
     await testToken.mint(secondBidderAddress, ethers.parseEther("10"));
@@ -83,25 +79,35 @@ describe("AuctionActionModule", () => {
     await secondBidderTokenInstance.approve(auctionAddress, ethers.parseEther("10"));
   });
 
-  const initialize = async (
-    currencyInput: string = "",
-    availableSinceTimestampInput: number = 0,
-    minTimeAfterBidInput: number = 30,
-    durationInput = 60,
-  ) => {
-    const recipients = [[authorAddress, 10000]];
+  type InitializeParams = {
+    availableSinceTimestamp?: number;
+    duration?: number;
+    minTimeAfterBid?: number;
+    reservePrice?: bigint;
+    minBidIncrement?: bigint;
+    referralFee?: number;
+    currency?: string;
+    recipients?: [string, number][];
+    onlyFollowers?: boolean;
+    tokenName?: string;
+    tokenSymbol?: string;
+    tokenRoyalties?: number;
+  };
 
-    const currency = currencyInput === "" ? await testToken.getAddress() : currencyInput;
-    const availableSinceTimestamp = availableSinceTimestampInput;
-    const duration = durationInput;
-    const minTimeAfterBid = minTimeAfterBidInput;
-    const reservePrice = 0;
-    const minBidIncrement = ethers.parseEther("0.001");
-    const referralFee = 1000;
-    const onlyFollowers = false;
-    const tokenName = encodeBytes32String("Test NFT");
-    const tokenSymbol = encodeBytes32String("TST-NFT");
-    const tokenRoyalties = 1000;
+  const initialize = async ({
+    availableSinceTimestamp = 0,
+    minTimeAfterBid = 30,
+    duration = 60,
+    reservePrice = 0n,
+    minBidIncrement = ethers.parseEther("0.001"),
+    referralFee = 1000,
+    currency = tokenAddress,
+    recipients = [[authorAddress, 10000]],
+    onlyFollowers = false,
+    tokenName = encodeBytes32String("Test NFT"),
+    tokenSymbol = encodeBytes32String("TST-NFT"),
+    tokenRoyalties = 1000,
+  }: InitializeParams = {}) => {
     const data = ethers.AbiCoder.defaultAbiCoder().encode(
       [
         "uint64",
@@ -151,7 +157,11 @@ describe("AuctionActionModule", () => {
     };
   };
 
-  // Test case for initializePublicationAction function
+  const getLatestBlockTimestamp = async () => {
+    const latestBlock = await ethers.provider.getBlock("latest");
+    return latestBlock?.timestamp ?? Math.floor(Date.now() / 1000);
+  };
+
   it("Should initialize publication action", async () => {
     const {
       tx,
@@ -306,6 +316,47 @@ describe("AuctionActionModule", () => {
     expect(auctionData.winner.profileOwner).to.equal(secondBidderAddress);
   });
 
+  it("Bid less than current winner is insufficient", async () => {
+    await initialize();
+
+    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(
+      ["uint256", "uint256"],
+      [ethers.parseEther("0.01"), FIRST_BIDDER_PROFILE_ID],
+    );
+
+    await auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: firstData,
+    });
+
+    const amount = ethers.parseEther("0.001");
+    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(
+      ["uint256", "uint256"],
+      [amount, SECOND_BIDDER_PROFILE_ID],
+    );
+
+    const secondTx = auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: SECOND_BIDDER_PROFILE_ID,
+      actorProfileOwner: secondBidderAddress,
+      transactionExecutor: secondBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: secondData,
+    });
+
+    await expect(secondTx).to.revertedWithCustomError(auctionAction, "InsufficientBidAmount");
+  });
+
   it("Bid less than minimum increment is insufficient", async () => {
     await initialize();
 
@@ -381,117 +432,7 @@ describe("AuctionActionModule", () => {
     expect(auctionData.endTimestamp).not.to.equal(0);
   });
 
-  it("Start time is working correctly", async () => {
-    const latestBlock = await ethers.provider.getBlock("latest");
-    const latestTimestamp = latestBlock?.timestamp ?? Math.floor(Date.now() / 1000);
-
-    //set time now + 120 seconds
-    const startTimestamp = latestTimestamp + 120;
-
-    await initialize("", startTimestamp, 60, 300);
-
-    const amount = ethers.parseEther("0.001");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
-    const toEarlyBidTx = auctionAction.processPublicationAction({
-      publicationActedProfileId: PROFILE_ID,
-      publicationActedId: PUBLICATION_ID,
-      actorProfileId: FIRST_BIDDER_PROFILE_ID,
-      actorProfileOwner: firstBidderAddress,
-      transactionExecutor: firstBidderAddress,
-      referrerProfileIds: [],
-      referrerPubIds: [],
-      referrerPubTypes: [],
-      actionModuleData: data,
-    });
-
-    await expect(toEarlyBidTx).to.revertedWithCustomError(auctionAction, "UnavailableAuction");
-
-    // // Increase time to go to start of auction
-    await ethers.provider.send("evm_setNextBlockTimestamp", [startTimestamp + 121]);
-    await ethers.provider.send("evm_mine", []);
-
-    //expect to work...
-    const onTimeBid = auctionAction.processPublicationAction({
-      publicationActedProfileId: PROFILE_ID,
-      publicationActedId: PUBLICATION_ID,
-      actorProfileId: FIRST_BIDDER_PROFILE_ID,
-      actorProfileOwner: firstBidderAddress,
-      transactionExecutor: firstBidderAddress,
-      referrerProfileIds: [],
-      referrerPubIds: [],
-      referrerPubTypes: [],
-      actionModuleData: data,
-    });
-    await expect(onTimeBid).to.emit(auctionAction, "BidPlaced");
-  });
-
-  it("Time after last bid is working correctly", async () => {
-    await initialize();
-
-    const amount = ethers.parseEther("0.001");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
-    const firstBidTx = auctionAction.processPublicationAction({
-      publicationActedProfileId: PROFILE_ID,
-      publicationActedId: PUBLICATION_ID,
-      actorProfileId: FIRST_BIDDER_PROFILE_ID,
-      actorProfileOwner: firstBidderAddress,
-      transactionExecutor: firstBidderAddress,
-      referrerProfileIds: [],
-      referrerPubIds: [],
-      referrerPubTypes: [],
-      actionModuleData: data,
-    });
-
-    await expect(firstBidTx).emit(auctionAction, "BidPlaced");
-
-    // // Increase time to go to near end of auction
-    await ethers.provider.send("evm_increaseTime", [50]);
-    await ethers.provider.send("evm_mine", []);
-
-    const amountSecond = ethers.parseEther("0.002");
-    const datasecond = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [amountSecond, FIRST_BIDDER_PROFILE_ID],
-    );
-    const lastBidTx = auctionAction.processPublicationAction({
-      publicationActedProfileId: PROFILE_ID,
-      publicationActedId: PUBLICATION_ID,
-      actorProfileId: FIRST_BIDDER_PROFILE_ID,
-      actorProfileOwner: firstBidderAddress,
-      transactionExecutor: firstBidderAddress,
-      referrerProfileIds: [],
-      referrerPubIds: [],
-      referrerPubTypes: [],
-      actionModuleData: datasecond,
-    });
-
-    await expect(lastBidTx).emit(auctionAction, "BidPlaced");
-
-    // Increase time to go to after auction
-    await ethers.provider.send("evm_increaseTime", [61]);
-    await ethers.provider.send("evm_mine", []);
-
-    const amountThird = ethers.parseEther("0.003");
-    const datathird = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [amountThird, FIRST_BIDDER_PROFILE_ID],
-    );
-    const toLateBidTx = auctionAction.processPublicationAction({
-      publicationActedProfileId: PROFILE_ID,
-      publicationActedId: PUBLICATION_ID,
-      actorProfileId: FIRST_BIDDER_PROFILE_ID,
-      actorProfileOwner: firstBidderAddress,
-      transactionExecutor: firstBidderAddress,
-      referrerProfileIds: [],
-      referrerPubIds: [],
-      referrerPubTypes: [],
-      actionModuleData: datathird,
-    });
-
-    await expect(toLateBidTx).to.revertedWithCustomError(auctionAction, "UnavailableAuction");
-  });
-
-  it("Highest bid winner cannot claim before end auction", async () => {
+  it("Winner cannot claim before auction ends", async () => {
     await initialize();
 
     const amount = ethers.parseEther("0.001");
@@ -547,5 +488,190 @@ describe("AuctionActionModule", () => {
     await expect(claimTxDone)
       .to.emit(auctionAction, "Collected")
       .withArgs(PROFILE_ID, PUBLICATION_ID, SECOND_BIDDER_PROFILE_ID, secondBidderAddress, anyValue, 1, anyValue);
+  });
+
+  it("Bid cannot be placed before auction start time", async () => {
+    const latestTimestamp = await getLatestBlockTimestamp();
+
+    //set time now + 120 seconds
+    const availableSinceTimestamp = latestTimestamp + 120;
+
+    await initialize({
+      availableSinceTimestamp,
+      minTimeAfterBid: 30,
+      duration: 300,
+    });
+
+    const amount = ethers.parseEther("0.001");
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const toEarlyBidTx = auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: data,
+    });
+
+    await expect(toEarlyBidTx).to.revertedWithCustomError(auctionAction, "UnavailableAuction");
+  });
+
+  it("Bid can be placed after auction start time", async () => {
+    const latestTimestamp = await getLatestBlockTimestamp();
+
+    //set time now + 120 seconds
+    const availableSinceTimestamp = latestTimestamp + 120;
+
+    await initialize({
+      availableSinceTimestamp,
+      minTimeAfterBid: 30,
+      duration: 300,
+    });
+
+    const amount = ethers.parseEther("0.001");
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+
+    // // Increase time to go to start of auction
+    await ethers.provider.send("evm_setNextBlockTimestamp", [availableSinceTimestamp + 121]);
+    await ethers.provider.send("evm_mine", []);
+
+    //expect to work...
+    const onTimeBid = auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: data,
+    });
+    await expect(onTimeBid).to.emit(auctionAction, "BidPlaced");
+  });
+
+  it("Auction is extended by minTimeAfterBid after last minute bids", async () => {
+    const minTimeAfterBid = 30;
+
+    await initialize({
+      minTimeAfterBid,
+      duration: 120,
+    });
+
+    // Place the first bid to start the auction
+    const firstAmount = ethers.parseEther("0.001");
+    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(
+      ["uint256", "uint256"],
+      [firstAmount, FIRST_BIDDER_PROFILE_ID],
+    );
+    const firstBid = await auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: firstData,
+    });
+
+    const firstBidBlock = await firstBid.getBlock();
+    if (!firstBidBlock) {
+      throw new Error("Block not found");
+    }
+
+    // Increase time to get near end of auction
+    await ethers.provider.send("evm_setNextBlockTimestamp", [firstBidBlock.timestamp + 119]);
+    await ethers.provider.send("evm_mine", []);
+
+    const secondAmount = ethers.parseEther("0.01");
+    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(
+      ["uint256", "uint256"],
+      [secondAmount, FIRST_BIDDER_PROFILE_ID],
+    );
+    const secondBid = await auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: secondData,
+    });
+    const secondBidBlock = await secondBid.getBlock();
+    if (!secondBidBlock) {
+      throw new Error("Block not found");
+    }
+
+    const auctionData = await auctionAction.getAuctionData(PROFILE_ID, PUBLICATION_ID);
+    expect(auctionData.endTimestamp).to.equal(secondBidBlock.timestamp + minTimeAfterBid);
+  });
+
+  it("Reserve price is met", async () => {
+    await initialize({
+      reservePrice: ethers.parseEther("1"),
+    });
+
+    const amount = ethers.parseEther("1");
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+
+    const tx = auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: data,
+    });
+
+    await expect(tx)
+      .to.emit(auctionAction, "BidPlaced")
+      .withArgs(
+        PROFILE_ID,
+        PUBLICATION_ID,
+        0,
+        amount,
+        firstBidderAddress,
+        FIRST_BIDDER_PROFILE_ID,
+        firstBidderAddress,
+        anyValue,
+        anyValue,
+      );
+
+    // Ensure the bidder is now the winner
+    const auctionData = await auctionAction.getAuctionData(PROFILE_ID, PUBLICATION_ID);
+    expect(auctionData.winner.profileOwner).to.equal(firstBidderAddress);
+  });
+
+  it("Reserve price is not met", async () => {
+    await initialize({
+      reservePrice: ethers.parseEther("1"),
+    });
+
+    const amount = ethers.parseEther("0.5");
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+
+    const tx = auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: data,
+    });
+
+    await expect(tx).to.revertedWithCustomError(auctionAction, "InsufficientBidAmount");
   });
 });
