@@ -92,7 +92,6 @@ struct AuctionData {
     uint256 winningBid;
     uint16 referralFee;
     address currency;
-    //RecipientData[] recipients;
     Winner winner;
     bool onlyFollowers;
     bool collected;
@@ -166,7 +165,6 @@ contract AuctionActionModule is
         uint256 minBidIncrement,
         uint16 referralFee,
         address currency,
-        RecipientData[] recipients,
         bool onlyFollowers,
         bytes32 tokenName,
         bytes32 tokenSymbol,
@@ -237,7 +235,8 @@ contract AuctionActionModule is
     mapping(uint256 => mapping(uint256 => AuctionData))
         internal _auctionDataByPubByProfile;
 
-    mapping(uint256 => mapping(uint256 => RecipientData[])) internal _recipientsByPublicationByProfile;
+    mapping(uint256 => mapping(uint256 => RecipientData[])) 
+        internal _recipientsByPubByProfile;
 
     /**
      * @dev Maps a given bidder's address to its referrer profile ID. Referrer matching publication's profile ID means
@@ -577,7 +576,6 @@ contract AuctionActionModule is
             initData.minBidIncrement,
             initData.referralFee,
             initData.currency,
-            initData.recipients,
             initData.onlyFollowers,
             initData.tokenName,
             initData.tokenSymbol,
@@ -606,11 +604,13 @@ contract AuctionActionModule is
      */
     function _processCollectFee(uint256 profileId, uint256 pubId) internal {
         _auctionDataByPubByProfile[profileId][pubId].feeProcessed = true;
+        
         uint256 referrerProfileId = _referrerProfileIdByPubByProfile[profileId][
             pubId
         ][_auctionDataByPubByProfile[profileId][pubId].winner.profileOwner];
+        
+        RecipientData[] storage recipients = _recipientsByPubByProfile[profileId][pubId];
 
-        RecipientData[] memory recipients = _recipientsByPublicationByProfile[profileId][pubId];
         if (referrerProfileId == profileId) {
             _processCollectFeeWithoutReferral(
                 _auctionDataByPubByProfile[profileId][pubId].winningBid,
@@ -652,8 +652,7 @@ contract AuctionActionModule is
         while (i < len) {
             uint256 amountForRecipient = (adjustedAmount * recipients[i].split) / BPS_MAX;
             if (amountForRecipient != 0)
-                IERC20(currency).safeTransferFrom(
-                    treasury,
+                IERC20(currency).safeTransfer(
                     recipients[i].recipient,
                     amountForRecipient
                 );
@@ -690,7 +689,6 @@ contract AuctionActionModule is
             uint256 referralAmount = (adjustedAmount * referralFee) / BPS_MAX;
             adjustedAmount = adjustedAmount - referralAmount;
 
-
             IERC20(currency).safeTransfer(
                 IERC721(HUB).ownerOf(referrerProfileId),
                 referralAmount
@@ -703,8 +701,7 @@ contract AuctionActionModule is
         while (i < len) {
             uint256 amountForRecipient = (adjustedAmount * recipients[i].split) / BPS_MAX;
             if (amountForRecipient != 0)
-                IERC20(currency).safeTransferFrom(
-                    treasury,
+                IERC20(currency).safeTransfer(
                     recipients[i].recipient,
                     amountForRecipient
                 );
@@ -927,7 +924,7 @@ contract AuctionActionModule is
         while (i < len) {
             if (recipients[i].split == 0) revert RecipientSplitCannotBeZero();
             totalSplits += recipients[i].split;
-            _recipientsByPublicationByProfile[profileId][pubId].push(recipients[i]);
+            _recipientsByPubByProfile[profileId][pubId].push(recipients[i]);
             unchecked {
                 ++i;
             }

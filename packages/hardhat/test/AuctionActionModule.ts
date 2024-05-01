@@ -89,8 +89,7 @@ describe("AuctionActionModule", () => {
     minTimeAfterBidInput: number = 30,
     durationInput = 60,
   ) => {
-    const recipients = [[authorAddress], [10000]];
-
+    const recipients = [[authorAddress, "10000"]];
     const currency = currencyInput === "" ? await testToken.getAddress() : currencyInput;
     const availableSinceTimestamp = availableSinceTimestampInput;
     const duration = durationInput;
@@ -111,7 +110,7 @@ describe("AuctionActionModule", () => {
         "uint256",
         "uint16",
         "address",
-        "tuple(address,uint16)",
+        "tuple(address,uint16)[]",
         "bool",
         "bytes32",
         "bytes32",
@@ -144,7 +143,6 @@ describe("AuctionActionModule", () => {
       referralFee,
       currency,
       recipients,
-      //authorAddress,
       onlyFollowers,
       tokenName,
       tokenSymbol,
@@ -164,7 +162,6 @@ describe("AuctionActionModule", () => {
       minBidIncrement,
       referralFee,
       currency,
-      recipients,
       onlyFollowers,
       tokenName,
       tokenSymbol,
@@ -185,7 +182,6 @@ describe("AuctionActionModule", () => {
         minBidIncrement,
         referralFee,
         currency,
-        recipients,
         onlyFollowers,
         tokenName,
         tokenSymbol,
@@ -372,6 +368,7 @@ describe("AuctionActionModule", () => {
     await ethers.provider.send("evm_mine", []);
 
     const claimTx = auctionAction.claim(PROFILE_ID, PUBLICATION_ID);
+
     await expect(claimTx)
       .to.emit(auctionAction, "Collected")
       .withArgs(PROFILE_ID, PUBLICATION_ID, FIRST_BIDDER_PROFILE_ID, firstBidderAddress, anyValue, 1, anyValue);
