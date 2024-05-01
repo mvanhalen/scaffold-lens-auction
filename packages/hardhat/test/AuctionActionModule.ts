@@ -89,6 +89,8 @@ describe("AuctionActionModule", () => {
     minTimeAfterBidInput: number = 30,
     durationInput = 60,
   ) => {
+    const recipients = [[authorAddress], [10000]];
+
     const currency = currencyInput === "" ? await testToken.getAddress() : currencyInput;
     const availableSinceTimestamp = availableSinceTimestampInput;
     const duration = durationInput;
@@ -109,7 +111,7 @@ describe("AuctionActionModule", () => {
         "uint256",
         "uint16",
         "address",
-        "address",
+        "tuple(address,uint16)",
         "bool",
         "bytes32",
         "bytes32",
@@ -123,7 +125,7 @@ describe("AuctionActionModule", () => {
         minBidIncrement,
         referralFee,
         currency,
-        authorAddress,
+        recipients,
         onlyFollowers,
         tokenName,
         tokenSymbol,
@@ -141,7 +143,8 @@ describe("AuctionActionModule", () => {
       minBidIncrement,
       referralFee,
       currency,
-      authorAddress,
+      recipients,
+      //authorAddress,
       onlyFollowers,
       tokenName,
       tokenSymbol,
@@ -161,7 +164,7 @@ describe("AuctionActionModule", () => {
       minBidIncrement,
       referralFee,
       currency,
-      authorAddress,
+      recipients,
       onlyFollowers,
       tokenName,
       tokenSymbol,
@@ -182,7 +185,7 @@ describe("AuctionActionModule", () => {
         minBidIncrement,
         referralFee,
         currency,
-        authorAddress,
+        recipients,
         onlyFollowers,
         tokenName,
         tokenSymbol,
@@ -202,7 +205,7 @@ describe("AuctionActionModule", () => {
     expect(auctionData.minBidIncrement).to.equal(minBidIncrement);
     expect(auctionData.referralFee).to.equal(referralFee);
     expect(auctionData.currency).to.equal(currency);
-    expect(auctionData.recipient).to.equal(authorAddress);
+    //expect(auctionData.recipient).to.equal(authorAddress);
     expect(auctionData.onlyFollowers).to.equal(onlyFollowers);
     expect(auctionData.tokenData.name).to.equal(tokenName);
     expect(auctionData.tokenData.symbol).to.equal(tokenSymbol);

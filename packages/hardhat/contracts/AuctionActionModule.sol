@@ -21,6 +21,18 @@ import {FollowValidationLib} from "lens-modules/contracts/modules/libraries/Foll
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {ICustomCollectNFT} from "./interfaces/ICustomCollectNFT.sol";
 
+
+/**
+ * @notice A struct containing recipient data.
+ *
+ * @param recipient The recipient of the a % of auction's winner bid amount.
+ * @param split The % of the winner bid amount fraction of BPS_MAX (10 000)
+ */
+struct RecipientData {
+    address recipient;
+    uint16 split;
+}
+
 /**
  * @notice A struct containing winner data.
  *
@@ -80,7 +92,7 @@ struct AuctionData {
     uint256 winningBid;
     uint16 referralFee;
     address currency;
-    address recipient;
+    //RecipientData[] recipients;
     Winner winner;
     bool onlyFollowers;
     bool collected;
@@ -96,7 +108,7 @@ struct InitAuctionData {
     uint256 minBidIncrement;
     uint16 referralFee;
     address currency;
-    address recipient;
+    RecipientData[] recipients;
     bool onlyFollowers;
     bytes32 tokenName;
     bytes32 tokenSymbol;
@@ -126,6 +138,9 @@ contract AuctionActionModule is
     error CollectAlreadyProcessed();
     error FeeAlreadyProcessed();
     error InsufficientBidAmount();
+    error TooManyRecipients();
+    error InvalidRecipientSplits();
+    error RecipientSplitCannotBeZero();
 
     event InitializedPublicationAction(
         uint256 profileId,
@@ -151,7 +166,7 @@ contract AuctionActionModule is
         uint256 minBidIncrement,
         uint16 referralFee,
         address currency,
-        address recipient,
+        RecipientData[] recipients,
         bool onlyFollowers,
         bytes32 tokenName,
         bytes32 tokenSymbol,
@@ -221,6 +236,8 @@ contract AuctionActionModule is
 
     mapping(uint256 => mapping(uint256 => AuctionData))
         internal _auctionDataByPubByProfile;
+
+    mapping(uint256 => mapping(uint256 => RecipientData[])) internal _recipientsByPublicationByProfile;
 
     /**
      * @dev Maps a given bidder's address to its referrer profile ID. Referrer matching publication's profile ID means
@@ -530,6 +547,7 @@ contract AuctionActionModule is
         InitAuctionData memory initData
     ) internal {
         _verifyErc20Currency(initData.currency);
+        _validateAndStoreRecipients(initData.recipients,profileId,pubId);
 
         AuctionData storage auction = _auctionDataByPubByProfile[profileId][
             pubId
@@ -541,7 +559,7 @@ contract AuctionActionModule is
         auction.minBidIncrement = initData.minBidIncrement;
         auction.referralFee = initData.referralFee;
         auction.currency = initData.currency;
-        auction.recipient = initData.recipient;
+        //auction.recipients = initData.recipients;
         auction.onlyFollowers = initData.onlyFollowers;
         auction.tokenData = TokenData(
             initData.tokenName,
@@ -559,7 +577,7 @@ contract AuctionActionModule is
             initData.minBidIncrement,
             initData.referralFee,
             initData.currency,
-            initData.recipient,
+            initData.recipients,
             initData.onlyFollowers,
             initData.tokenName,
             initData.tokenSymbol,
@@ -591,11 +609,13 @@ contract AuctionActionModule is
         uint256 referrerProfileId = _referrerProfileIdByPubByProfile[profileId][
             pubId
         ][_auctionDataByPubByProfile[profileId][pubId].winner.profileOwner];
+
+        RecipientData[] memory recipients = _recipientsByPublicationByProfile[profileId][pubId];
         if (referrerProfileId == profileId) {
             _processCollectFeeWithoutReferral(
                 _auctionDataByPubByProfile[profileId][pubId].winningBid,
                 _auctionDataByPubByProfile[profileId][pubId].currency,
-                _auctionDataByPubByProfile[profileId][pubId].recipient
+                recipients
             );
         } else {
             _processCollectFeeWithReferral(
@@ -603,7 +623,7 @@ contract AuctionActionModule is
                 _auctionDataByPubByProfile[profileId][pubId].referralFee,
                 referrerProfileId,
                 _auctionDataByPubByProfile[profileId][pubId].currency,
-                _auctionDataByPubByProfile[profileId][pubId].recipient
+                recipients
             );
         }
         emit FeeProcessed(profileId, pubId, block.timestamp);
@@ -614,20 +634,32 @@ contract AuctionActionModule is
      *
      * @param winnerBid The amount of the winner bid.
      * @param currency The currency in which the bids are denominated.
-     * @param recipient The recipient of the auction's winner bid amount.
+     * @param recipients The recipients of the auction's winner bid amount.
      */
     function _processCollectFeeWithoutReferral(
         uint256 winnerBid,
         address currency,
-        address recipient
+        RecipientData[] memory recipients
     ) internal {
         (address treasury, uint16 treasuryFee) = _treasuryData();
 
         uint256 treasuryAmount = (winnerBid * treasuryFee) / BPS_MAX;
         uint256 adjustedAmount = winnerBid - treasuryAmount;
-        IERC20(currency).safeTransfer(recipient, adjustedAmount);
-        if (treasuryAmount > 0) {
-            IERC20(currency).safeTransfer(treasury, treasuryAmount);
+
+        uint256 len = recipients.length;
+
+        uint256 i;
+        while (i < len) {
+            uint256 amountForRecipient = (adjustedAmount * recipients[i].split) / BPS_MAX;
+            if (amountForRecipient != 0)
+                IERC20(currency).safeTransferFrom(
+                    treasury,
+                    recipients[i].recipient,
+                    amountForRecipient
+                );
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -640,14 +672,14 @@ contract AuctionActionModule is
      * Measured in basis points, each basis point represents 0.01%.
      * @param referrerProfileId The token ID of the referrer's profile.
      * @param currency The currency in which the bids are denominated.
-     * @param recipient The recipient of the auction's winner bid amount.
+     * @param recipients The recipient of the auction's winner bid amount.
      */
     function _processCollectFeeWithReferral(
         uint256 winnerBid,
         uint16 referralFee,
         uint256 referrerProfileId,
         address currency,
-        address recipient
+        RecipientData[] memory recipients
     ) internal {
         (address treasury, uint16 treasuryFee) = _treasuryData();
         uint256 treasuryAmount = (winnerBid * treasuryFee) / BPS_MAX;
@@ -657,14 +689,28 @@ contract AuctionActionModule is
             // don't bypass the treasury fee, in essence referrals pay their fair share to the treasury.
             uint256 referralAmount = (adjustedAmount * referralFee) / BPS_MAX;
             adjustedAmount = adjustedAmount - referralAmount;
+
+
             IERC20(currency).safeTransfer(
                 IERC721(HUB).ownerOf(referrerProfileId),
                 referralAmount
             );
         }
-        IERC20(currency).safeTransfer(recipient, adjustedAmount);
-        if (treasuryAmount > 0) {
-            IERC20(currency).safeTransfer(treasury, treasuryAmount);
+        
+        uint256 len = recipients.length;
+
+        uint256 i;
+        while (i < len) {
+            uint256 amountForRecipient = (adjustedAmount * recipients[i].split) / BPS_MAX;
+            if (amountForRecipient != 0)
+                IERC20(currency).safeTransferFrom(
+                    treasury,
+                    recipients[i].recipient,
+                    amountForRecipient
+                );
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -856,6 +902,39 @@ contract AuctionActionModule is
                         amount - auction.winningBid < auction.minBidIncrement)))
         ) {
             revert InsufficientBidAmount();
+        }
+    }
+
+    function _validateAndStoreRecipients(
+        RecipientData[] memory recipients, 
+        uint256 profileId,
+        uint256 pubId
+        )internal{ 
+        uint256 len = recipients.length;
+
+        // Check number of recipients is supported min 1 max 5
+        if (len < 1) {
+            revert Errors.InitParamsInvalid();
+        }
+
+        if (len > 5) {
+            revert TooManyRecipients();
+        }
+
+        // Check recipient splits sum to 10 000 BPS (100%)
+        uint256 totalSplits;
+        uint256 i;
+        while (i < len) {
+            if (recipients[i].split == 0) revert RecipientSplitCannotBeZero();
+            totalSplits += recipients[i].split;
+            _recipientsByPublicationByProfile[profileId][pubId].push(recipients[i]);
+            unchecked {
+                ++i;
+            }
+        }
+
+        if (totalSplits != BPS_MAX) {
+            revert InvalidRecipientSplits();
         }
     }
 }
