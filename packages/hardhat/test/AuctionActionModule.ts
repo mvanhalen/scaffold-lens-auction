@@ -89,7 +89,7 @@ describe("AuctionActionModule", () => {
     minTimeAfterBidInput: number = 30,
     durationInput = 60,
   ) => {
-    const recipients = [[authorAddress], [10000]];
+    const recipients = [[authorAddress, 10000]];
 
     const currency = currencyInput === "" ? await testToken.getAddress() : currencyInput;
     const availableSinceTimestamp = availableSinceTimestampInput;
@@ -111,7 +111,7 @@ describe("AuctionActionModule", () => {
         "uint256",
         "uint16",
         "address",
-        "tuple(address,uint16)",
+        "tuple(address,uint16)[]",
         "bool",
         "bytes32",
         "bytes32",
@@ -144,7 +144,6 @@ describe("AuctionActionModule", () => {
       referralFee,
       currency,
       recipients,
-      //authorAddress,
       onlyFollowers,
       tokenName,
       tokenSymbol,
@@ -164,7 +163,6 @@ describe("AuctionActionModule", () => {
       minBidIncrement,
       referralFee,
       currency,
-      recipients,
       onlyFollowers,
       tokenName,
       tokenSymbol,
@@ -185,7 +183,7 @@ describe("AuctionActionModule", () => {
         minBidIncrement,
         referralFee,
         currency,
-        recipients,
+        anyValue, // ethers only matches top-level values so we check recipients below
         onlyFollowers,
         tokenName,
         tokenSymbol,
@@ -194,8 +192,8 @@ describe("AuctionActionModule", () => {
 
     await expect(tx).not.to.revertedWithCustomError(auctionAction, "InitParamsInvalid");
 
-    // Get the tip receiver
     const auctionData = await auctionAction.getAuctionData(PROFILE_ID, PUBLICATION_ID);
+    const recipientData = await auctionAction.getRecipients(PROFILE_ID, PUBLICATION_ID);
 
     // Test if the auction data is correctly set
     expect(auctionData.availableSinceTimestamp).to.equal(availableSinceTimestamp);
@@ -205,7 +203,7 @@ describe("AuctionActionModule", () => {
     expect(auctionData.minBidIncrement).to.equal(minBidIncrement);
     expect(auctionData.referralFee).to.equal(referralFee);
     expect(auctionData.currency).to.equal(currency);
-    //expect(auctionData.recipient).to.equal(authorAddress);
+    expect(recipientData[0].recipient).to.equal(authorAddress);
     expect(auctionData.onlyFollowers).to.equal(onlyFollowers);
     expect(auctionData.tokenData.name).to.equal(tokenName);
     expect(auctionData.tokenData.symbol).to.equal(tokenSymbol);
