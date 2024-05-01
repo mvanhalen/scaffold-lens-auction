@@ -9,6 +9,7 @@ import {
 } from "../typechain-types";
 import getNextContractAddress from "../lib/get-next-contract-address";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
+import { encodeBytes32String } from "ethers";
 
 //In progress, checking needed
 // - setting specific start timestamp ---working for to early not working. But not after?
@@ -96,12 +97,12 @@ describe("AuctionActionModule", () => {
     const minBidIncrement = ethers.parseEther("0.001");
     const referralFee = 1000;
     const onlyFollowers = false;
-    const tokenName = "Test Token";
-    const tokenSymbol = "TST";
+    const tokenName = encodeBytes32String("Test NFT");
+    const tokenSymbol = encodeBytes32String("TST-NFT");
     const tokenRoyalties = 1000;
     const data = ethers.AbiCoder.defaultAbiCoder().encode(
       [
-        "uint64",
+        "uint256",
         "uint32",
         "uint32",
         "uint256",
@@ -110,8 +111,8 @@ describe("AuctionActionModule", () => {
         "address",
         "address",
         "bool",
-        "string",
-        "string",
+        "bytes32",
+        "bytes32",
         "uint16",
       ],
       [
@@ -129,7 +130,7 @@ describe("AuctionActionModule", () => {
         tokenRoyalties,
       ],
     );
-    const tx = auctionAction.initializePublicationAction(PROFILE_ID, PUBLICATION_ID, authorAddress, data);
+    const tx = await auctionAction.initializePublicationAction(PROFILE_ID, PUBLICATION_ID, authorAddress, data);
     return {
       tx,
       data,
@@ -203,6 +204,9 @@ describe("AuctionActionModule", () => {
     expect(auctionData.currency).to.equal(currency);
     expect(auctionData.recipient).to.equal(authorAddress);
     expect(auctionData.onlyFollowers).to.equal(onlyFollowers);
+    expect(auctionData.tokenData.name).to.equal(tokenName);
+    expect(auctionData.tokenData.symbol).to.equal(tokenSymbol);
+    expect(auctionData.tokenData.royalty).to.equal(tokenRoyalties);
   });
 
   it("First bidder should be winner", async () => {
@@ -377,8 +381,11 @@ describe("AuctionActionModule", () => {
   });
 
   it("Start time is working correctly", async () => {
+    const latestBlock = await ethers.provider.getBlock("latest");
+    const latestTimestamp = latestBlock?.timestamp ?? Math.floor(Date.now() / 1000);
+
     //set time now + 120 seconds
-    const startTimestamp = Math.floor(Date.now() / 1000) + 100;
+    const startTimestamp = latestTimestamp + 120;
 
     await initialize("", startTimestamp, 60, 300);
 
@@ -399,7 +406,7 @@ describe("AuctionActionModule", () => {
     await expect(toEarlyBidTx).to.revertedWithCustomError(auctionAction, "UnavailableAuction");
 
     // // Increase time to go to start of auction
-    await ethers.provider.send("evm_setNextBlockTimestamp", [startTimestamp + 50]);
+    await ethers.provider.send("evm_setNextBlockTimestamp", [startTimestamp + 121]);
     await ethers.provider.send("evm_mine", []);
 
     //expect to work...
