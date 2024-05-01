@@ -102,7 +102,7 @@ describe("AuctionActionModule", () => {
     const tokenRoyalties = 1000;
     const data = ethers.AbiCoder.defaultAbiCoder().encode(
       [
-        "uint256",
+        "uint64",
         "uint32",
         "uint32",
         "uint256",

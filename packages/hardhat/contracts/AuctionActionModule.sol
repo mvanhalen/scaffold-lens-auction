@@ -70,7 +70,7 @@ struct TokenData {
  * @param tokenData The data to create the ERC-721 token.
  */
 struct AuctionData {
-    uint256 availableSinceTimestamp;
+    uint64 availableSinceTimestamp;
     uint64 startTimestamp;
     uint32 duration;
     uint32 minTimeAfterBid;
@@ -89,7 +89,7 @@ struct AuctionData {
 }
 
 struct InitAuctionData {
-    uint256 availableSinceTimestamp;
+    uint64 availableSinceTimestamp;
     uint32 duration;
     uint32 minTimeAfterBid;
     uint256 reservePrice;
@@ -144,7 +144,7 @@ contract AuctionActionModule is
     event AuctionCreated(
         uint256 indexed profileId,
         uint256 indexed pubId,
-        uint256 availableSinceTimestamp,
+        uint64 availableSinceTimestamp,
         uint32 duration,
         uint32 minTimeAfterBid,
         uint256 reservePrice,
