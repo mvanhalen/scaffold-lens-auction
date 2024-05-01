@@ -36,4 +36,5 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-/contracts/deployedContracts.ts
+
+# contract
