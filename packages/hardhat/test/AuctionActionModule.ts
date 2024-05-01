@@ -204,6 +204,9 @@ describe("AuctionActionModule", () => {
     expect(auctionData.currency).to.equal(currency);
     expect(auctionData.recipient).to.equal(authorAddress);
     expect(auctionData.onlyFollowers).to.equal(onlyFollowers);
+    expect(auctionData.tokenData.name).to.equal(tokenName);
+    expect(auctionData.tokenData.symbol).to.equal(tokenSymbol);
+    expect(auctionData.tokenData.royalty).to.equal(tokenRoyalties);
   });
 
   it("First bidder should be winner", async () => {
