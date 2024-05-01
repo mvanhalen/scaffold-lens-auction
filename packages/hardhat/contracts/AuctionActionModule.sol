@@ -268,6 +268,17 @@ contract AuctionActionModule is
             super.supportsInterface(interfaceID);
     }
 
+    function _validateInitParams(InitAuctionData memory data) internal view {
+        if (
+            data.duration == 0 ||
+            data.duration < data.minTimeAfterBid ||
+            !MODULE_REGISTRY.isErc20CurrencyRegistered(data.currency) ||
+            data.referralFee > BPS_MAX
+        ) {
+            revert Errors.InitParamsInvalid();
+        }
+    }
+
     /**
      * @dev See `AuctionData` struct's natspec in order to understand `data` decoded values.
      *
@@ -286,16 +297,54 @@ contract AuctionActionModule is
             data
         );
 
-        InitAuctionData memory initData = abi.decode(data, (InitAuctionData));
+        (
+            uint64 availableSinceTimestamp,
+            uint32 duration,
+            uint32 minTimeAfterBid,
+            uint256 reservePrice,
+            uint256 minBidIncrement,
+            uint16 referralFee,
+            address currency,
+            RecipientData[] memory recipients,
+            bool onlyFollowers,
+            bytes32 tokenName,
+            bytes32 tokenSymbol,
+            uint16 tokenRoyalty
+        ) = abi.decode(
+                data,
+                (
+                    uint64,
+                    uint32,
+                    uint32,
+                    uint256,
+                    uint256,
+                    uint16,
+                    address,
+                    RecipientData[],
+                    bool,
+                    bytes32,
+                    bytes32,
+                    uint16
+                )
+            );
 
-        if (
-            initData.duration == 0 ||
-            initData.duration < initData.minTimeAfterBid ||
-            !MODULE_REGISTRY.isErc20CurrencyRegistered(initData.currency) ||
-            initData.referralFee > BPS_MAX
-        ) {
-            revert Errors.InitParamsInvalid();
-        }
+        InitAuctionData memory initData = InitAuctionData({
+            availableSinceTimestamp: availableSinceTimestamp,
+            duration: duration,
+            minTimeAfterBid: minTimeAfterBid,
+            reservePrice: reservePrice,
+            minBidIncrement: minBidIncrement,
+            referralFee: referralFee,
+            currency: currency,
+            recipients: recipients,
+            onlyFollowers: onlyFollowers,
+            tokenName: tokenName,
+            tokenSymbol: tokenSymbol,
+            tokenRoyalty: tokenRoyalty
+        });
+
+        _validateInitParams(initData);
+        _validateAndStoreRecipients(initData.recipients, profileId, pubId);
 
         _initAuction(profileId, pubId, initData);
         return data;
@@ -552,9 +601,6 @@ contract AuctionActionModule is
         uint256 pubId,
         InitAuctionData memory initData
     ) internal {
-        _verifyErc20Currency(initData.currency);
-        _validateAndStoreRecipients(initData.recipients, profileId, pubId);
-
         AuctionData storage auction = _auctionDataByPubByProfile[profileId][
             pubId
         ];
@@ -565,7 +611,6 @@ contract AuctionActionModule is
         auction.minBidIncrement = initData.minBidIncrement;
         auction.referralFee = initData.referralFee;
         auction.currency = initData.currency;
-        //auction.recipients = initData.recipients;
         auction.onlyFollowers = initData.onlyFollowers;
         auction.tokenData = TokenData(
             initData.tokenName,
