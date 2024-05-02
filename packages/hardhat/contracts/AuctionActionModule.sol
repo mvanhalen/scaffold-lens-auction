@@ -363,7 +363,6 @@ contract AuctionActionModule is
     /**
      *  this open action makes the bid as gasless Open action
      *  params.actionModuleData contains amount The bid amount to offer.
-     *  bidderProfileId The token ID of the bidder profile.
      */
     function processPublicationAction(
         Types.ProcessActionParams calldata params
@@ -375,10 +374,7 @@ contract AuctionActionModule is
             params.actionModuleData
         );
 
-        (uint256 amount, uint256 bidderProfileId) = abi.decode(
-            params.actionModuleData,
-            (uint256, uint256)
-        );
+        uint256 amount = abi.decode(params.actionModuleData, (uint256));
 
         _bid(
             params.publicationActedProfileId,
@@ -386,7 +382,7 @@ contract AuctionActionModule is
             params.referrerProfileIds,
             amount,
             params.actorProfileOwner,
-            bidderProfileId,
+            params.actorProfileId,
             params.transactionExecutor
         );
 

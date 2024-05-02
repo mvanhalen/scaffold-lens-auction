@@ -234,7 +234,7 @@ describe("AuctionActionModule", () => {
     await initialize();
 
     const amount = ethers.parseEther("0.001");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     const tx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -272,10 +272,7 @@ describe("AuctionActionModule", () => {
   it("Valid higher bidder is winner", async () => {
     await initialize();
 
-    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [ethers.parseEther("0.001"), FIRST_BIDDER_PROFILE_ID],
-    );
+    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [ethers.parseEther("0.001")]);
 
     await auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -290,10 +287,7 @@ describe("AuctionActionModule", () => {
     });
 
     const amount = ethers.parseEther("0.01");
-    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [amount, SECOND_BIDDER_PROFILE_ID],
-    );
+    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     const secondTx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -329,10 +323,7 @@ describe("AuctionActionModule", () => {
   it("Bid less than current winner is insufficient", async () => {
     await initialize();
 
-    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [ethers.parseEther("0.01"), FIRST_BIDDER_PROFILE_ID],
-    );
+    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [ethers.parseEther("0.01")]);
 
     await auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -347,10 +338,7 @@ describe("AuctionActionModule", () => {
     });
 
     const amount = ethers.parseEther("0.001");
-    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [amount, SECOND_BIDDER_PROFILE_ID],
-    );
+    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     const secondTx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -370,10 +358,7 @@ describe("AuctionActionModule", () => {
   it("Bid less than minimum increment is insufficient", async () => {
     await initialize();
 
-    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [ethers.parseEther("0.001"), FIRST_BIDDER_PROFILE_ID],
-    );
+    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [ethers.parseEther("0.001")]);
 
     await auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -388,10 +373,7 @@ describe("AuctionActionModule", () => {
     });
 
     const amount = ethers.parseEther("0.0015");
-    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [amount, SECOND_BIDDER_PROFILE_ID],
-    );
+    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     const secondTx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -412,7 +394,7 @@ describe("AuctionActionModule", () => {
     await initialize();
 
     const amount = ethers.parseEther("0.001");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     await auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -446,7 +428,7 @@ describe("AuctionActionModule", () => {
     await initialize();
 
     const amount = ethers.parseEther("0.001");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
     const firstBidTx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
       publicationActedId: PUBLICATION_ID,
@@ -465,10 +447,7 @@ describe("AuctionActionModule", () => {
     await expect(claimTx).to.revertedWithCustomError(auctionAction, "OngoingAuction");
 
     const amountSecond = ethers.parseEther("0.002");
-    const dataSecond = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [amountSecond, SECOND_BIDDER_PROFILE_ID],
-    );
+    const dataSecond = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amountSecond]);
     const secondBidTx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
       publicationActedId: PUBLICATION_ID,
@@ -513,7 +492,7 @@ describe("AuctionActionModule", () => {
     });
 
     const amount = ethers.parseEther("0.001");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
     const toEarlyBidTx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
       publicationActedId: PUBLICATION_ID,
@@ -542,7 +521,7 @@ describe("AuctionActionModule", () => {
     });
 
     const amount = ethers.parseEther("0.001");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     // // Increase time to go to start of auction
     await ethers.provider.send("evm_setNextBlockTimestamp", [availableSinceTimestamp + 121]);
@@ -573,10 +552,7 @@ describe("AuctionActionModule", () => {
 
     // Place the first bid to start the auction
     const firstAmount = ethers.parseEther("0.001");
-    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [firstAmount, FIRST_BIDDER_PROFILE_ID],
-    );
+    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [firstAmount]);
     const firstBid = await auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
       publicationActedId: PUBLICATION_ID,
@@ -599,10 +575,7 @@ describe("AuctionActionModule", () => {
     await ethers.provider.send("evm_mine", []);
 
     const secondAmount = ethers.parseEther("0.01");
-    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [secondAmount, FIRST_BIDDER_PROFILE_ID],
-    );
+    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [secondAmount]);
     const secondBid = await auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
       publicationActedId: PUBLICATION_ID,
@@ -629,7 +602,7 @@ describe("AuctionActionModule", () => {
     });
 
     const amount = ethers.parseEther("1");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     const tx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -668,7 +641,7 @@ describe("AuctionActionModule", () => {
     });
 
     const amount = ethers.parseEther("0.5");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     const tx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -693,7 +666,7 @@ describe("AuctionActionModule", () => {
     });
 
     const amount = ethers.parseEther("1");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     await auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
