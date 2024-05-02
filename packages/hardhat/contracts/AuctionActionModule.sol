@@ -22,6 +22,17 @@ import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {ICustomCollectNFT} from "./interfaces/ICustomCollectNFT.sol";
 
 /**
+ * @notice A struct containing recipient data.
+ *
+ * @param recipient The recipient of the a % of auction's winner bid amount.
+ * @param split The % of the winner bid amount fraction of BPS_MAX (10 000)
+ */
+struct RecipientData {
+    address recipient;
+    uint16 split;
+}
+
+/**
  * @notice A struct containing winner data.
  *
  * @param profileId The token ID of the profile that is winning the auction.
@@ -62,7 +73,6 @@ struct TokenData {
  * @param referralFee The percentage of the fee that will be transferred to the referrer in case of having one.
  * Measured in basis points, each basis point represents 0.01%.
  * @param currency The currency in which the bids are denominated.
- * @param recipient The recipient of the auction's winner bid amount.
  * @param winner The current auction winner.
  * @param onlyFollowers Indicates whether followers are the only allowed to bid, and collect, or not.
  * @param collected Indicates whether the publication has been collected or not.
@@ -70,7 +80,7 @@ struct TokenData {
  * @param tokenData The data to create the ERC-721 token.
  */
 struct AuctionData {
-    uint256 availableSinceTimestamp;
+    uint64 availableSinceTimestamp;
     uint64 startTimestamp;
     uint32 duration;
     uint32 minTimeAfterBid;
@@ -80,7 +90,6 @@ struct AuctionData {
     uint256 winningBid;
     uint16 referralFee;
     address currency;
-    address recipient;
     Winner winner;
     bool onlyFollowers;
     bool collected;
@@ -89,14 +98,14 @@ struct AuctionData {
 }
 
 struct InitAuctionData {
-    uint256 availableSinceTimestamp;
+    uint64 availableSinceTimestamp;
     uint32 duration;
     uint32 minTimeAfterBid;
     uint256 reservePrice;
     uint256 minBidIncrement;
     uint16 referralFee;
     address currency;
-    address recipient;
+    RecipientData[] recipients;
     bool onlyFollowers;
     bytes32 tokenName;
     bytes32 tokenSymbol;
@@ -107,7 +116,7 @@ error ModuleDataMismatch();
 
 /**
  * @title AuctionCollectActionModule
- * @author Lens Protocol, Martijn van Halen and Paul Burke
+ * @author donosonaumczuk, Martijn van Halen and Paul Burke
  *
  * @notice This module works by creating an English auction for the underlying publication. After the auction ends, only
  * the auction winner is allowed to collect the publication.
@@ -126,6 +135,9 @@ contract AuctionActionModule is
     error CollectAlreadyProcessed();
     error FeeAlreadyProcessed();
     error InsufficientBidAmount();
+    error TooManyRecipients();
+    error InvalidRecipientSplits();
+    error RecipientSplitCannotBeZero();
 
     event InitializedPublicationAction(
         uint256 profileId,
@@ -144,14 +156,14 @@ contract AuctionActionModule is
     event AuctionCreated(
         uint256 indexed profileId,
         uint256 indexed pubId,
-        uint256 availableSinceTimestamp,
+        uint64 availableSinceTimestamp,
         uint32 duration,
         uint32 minTimeAfterBid,
         uint256 reservePrice,
         uint256 minBidIncrement,
         uint16 referralFee,
         address currency,
-        address recipient,
+        RecipientData[] recipients,
         bool onlyFollowers,
         bytes32 tokenName,
         bytes32 tokenSymbol,
@@ -161,7 +173,7 @@ contract AuctionActionModule is
     event BidPlaced(
         uint256 indexed profileId,
         uint256 indexed pubId,
-        uint256 referrerProfileId,
+        uint256[] referrerProfileIds,
         uint256 amount,
         address bidderOwner,
         uint256 bidderProfileId,
@@ -215,24 +227,29 @@ contract AuctionActionModule is
 
     address public immutable COLLECT_NFT_IMPL;
     address public immutable TREASURY;
+    address public immutable PROFILE_NFT;
 
     mapping(uint256 profileId => mapping(uint256 pubId => address collectNFT))
         internal _collectNFTByPub;
 
-    mapping(uint256 => mapping(uint256 => AuctionData))
+    mapping(uint256 profileId => mapping(uint256 pubId => AuctionData auctionData))
         internal _auctionDataByPubByProfile;
 
+    mapping(uint256 profileId => mapping(uint256 pubId => RecipientData[] recipients))
+        internal _recipientsByPublicationByProfile;
+
     /**
-     * @dev Maps a given bidder's address to its referrer profile ID. Referrer matching publication's profile ID means
+     * @dev Maps a given bidder's address to its referrer profile IDs. Referrer matching publication's profile ID means
      * no referral, referrer being zero means that bidder has not bidded yet on this auction.
      * The referrer is set through, and only through, the first bidder's bid on each auction.
      */
-    mapping(uint256 => mapping(uint256 => mapping(address => uint256)))
+    mapping(uint256 profileId => mapping(uint256 pubId => mapping(address bidderAddress => uint256[] referrerProfileIds)))
         internal _referrerProfileIdByPubByProfile;
 
     constructor(
         address hub,
         address treasury,
+        address profileNFT,
         IModuleRegistry moduleRegistry,
         address collectNFTImpl
     )
@@ -242,6 +259,7 @@ contract AuctionActionModule is
         LensModuleRegistrant(moduleRegistry)
     {
         TREASURY = treasury;
+        PROFILE_NFT = profileNFT;
         COLLECT_NFT_IMPL = collectNFTImpl;
     }
 
@@ -251,6 +269,68 @@ contract AuctionActionModule is
         return
             interfaceID == type(IPublicationActionModule).interfaceId ||
             super.supportsInterface(interfaceID);
+    }
+
+    function _validateInitParams(InitAuctionData memory data) internal view {
+        if (
+            data.duration == 0 ||
+            data.duration < data.minTimeAfterBid ||
+            !MODULE_REGISTRY.isErc20CurrencyRegistered(data.currency) ||
+            data.referralFee > BPS_MAX
+        ) {
+            revert Errors.InitParamsInvalid();
+        }
+    }
+
+    function decodeInitParams(
+        bytes calldata data
+    ) internal pure returns (InitAuctionData memory) {
+        (
+            uint64 availableSinceTimestamp,
+            uint32 duration,
+            uint32 minTimeAfterBid,
+            uint256 reservePrice,
+            uint256 minBidIncrement,
+            uint16 referralFee,
+            address currency,
+            RecipientData[] memory recipients,
+            bool onlyFollowers,
+            bytes32 tokenName,
+            bytes32 tokenSymbol,
+            uint16 tokenRoyalty
+        ) = abi.decode(
+                data,
+                (
+                    uint64,
+                    uint32,
+                    uint32,
+                    uint256,
+                    uint256,
+                    uint16,
+                    address,
+                    RecipientData[],
+                    bool,
+                    bytes32,
+                    bytes32,
+                    uint16
+                )
+            );
+
+        return
+            InitAuctionData({
+                availableSinceTimestamp: availableSinceTimestamp,
+                duration: duration,
+                minTimeAfterBid: minTimeAfterBid,
+                reservePrice: reservePrice,
+                minBidIncrement: minBidIncrement,
+                referralFee: referralFee,
+                currency: currency,
+                recipients: recipients,
+                onlyFollowers: onlyFollowers,
+                tokenName: tokenName,
+                tokenSymbol: tokenSymbol,
+                tokenRoyalty: tokenRoyalty
+            });
     }
 
     /**
@@ -271,16 +351,10 @@ contract AuctionActionModule is
             data
         );
 
-        InitAuctionData memory initData = abi.decode(data, (InitAuctionData));
+        InitAuctionData memory initData = decodeInitParams(data);
 
-        if (
-            initData.duration == 0 ||
-            initData.duration < initData.minTimeAfterBid ||
-            !MODULE_REGISTRY.isErc20CurrencyRegistered(initData.currency) ||
-            initData.referralFee > BPS_MAX
-        ) {
-            revert Errors.InitParamsInvalid();
-        }
+        _validateInitParams(initData);
+        _validateAndStoreRecipients(initData.recipients, profileId, pubId);
 
         _initAuction(profileId, pubId, initData);
         return data;
@@ -309,7 +383,7 @@ contract AuctionActionModule is
         _bid(
             params.publicationActedProfileId,
             params.publicationActedId,
-            params.publicationActedProfileId,
+            params.referrerProfileIds,
             amount,
             params.actorProfileOwner,
             bidderProfileId,
@@ -332,6 +406,14 @@ contract AuctionActionModule is
         uint256 pubId
     ) external view returns (AuctionData memory) {
         return _auctionDataByPubByProfile[profileId][pubId];
+    }
+
+    // get recipients
+    function getRecipients(
+        uint256 profileId,
+        uint256 pubId
+    ) external view returns (RecipientData[] memory) {
+        return _recipientsByPublicationByProfile[profileId][pubId];
     }
 
     function bytes32ToString(
@@ -465,57 +547,6 @@ contract AuctionActionModule is
     }
 
     /**
-     * @notice Processes the collect fees using the auction winning bid funds and taking into account referrer and
-     * treasury fees if necessary.
-     *
-     * @dev This function allows anyone to process the collect fees, not needing to wait for `processCollect` to be
-     * called, as long as the auction has finished, has a winner and the publication has not been collected yet.
-     *
-     * @param profileId The token ID of the profile associated with the underlying publication.
-     * @param pubId The publication ID associated with the underlying publication.
-     */
-    function processCollectFee(uint256 profileId, uint256 pubId) external {
-        if (
-            _auctionDataByPubByProfile[profileId][pubId].duration == 0 ||
-            block.timestamp <
-            _auctionDataByPubByProfile[profileId][pubId].availableSinceTimestamp
-        ) {
-            revert UnavailableAuction();
-        }
-        if (
-            _auctionDataByPubByProfile[profileId][pubId].startTimestamp == 0 ||
-            block.timestamp <=
-            _auctionDataByPubByProfile[profileId][pubId].endTimestamp
-        ) {
-            revert OngoingAuction();
-        }
-        if (_auctionDataByPubByProfile[profileId][pubId].feeProcessed) {
-            revert FeeAlreadyProcessed();
-        }
-        _processCollectFee(profileId, pubId);
-    }
-
-    /**
-     * @notice Returns the referrer profile in the given publication's auction.
-     *
-     * @param profileId The token ID of the profile associated with the underlying publication.
-     * @param pubId The publication ID associated with the underlying publication.
-     * @param bidder The address whose referrer profile should be returned.
-     *
-     * @return The ID of the referrer profile. Zero means no referral.
-     */
-    function getReferrerProfileIdOf(
-        uint256 profileId,
-        uint256 pubId,
-        address bidder
-    ) external view returns (uint256) {
-        uint256 referrerProfileId = _referrerProfileIdByPubByProfile[profileId][
-            pubId
-        ][bidder];
-        return referrerProfileId == profileId ? 0 : referrerProfileId;
-    }
-
-    /**
      * @notice Initializes the auction struct for the given publication.
      *
      * @dev Auction initialization logic moved to this function to avoid stack too deep error.
@@ -529,8 +560,6 @@ contract AuctionActionModule is
         uint256 pubId,
         InitAuctionData memory initData
     ) internal {
-        _verifyErc20Currency(initData.currency);
-
         AuctionData storage auction = _auctionDataByPubByProfile[profileId][
             pubId
         ];
@@ -541,7 +570,6 @@ contract AuctionActionModule is
         auction.minBidIncrement = initData.minBidIncrement;
         auction.referralFee = initData.referralFee;
         auction.currency = initData.currency;
-        auction.recipient = initData.recipient;
         auction.onlyFollowers = initData.onlyFollowers;
         auction.tokenData = TokenData(
             initData.tokenName,
@@ -559,7 +587,7 @@ contract AuctionActionModule is
             initData.minBidIncrement,
             initData.referralFee,
             initData.currency,
-            initData.recipient,
+            initData.recipients,
             initData.onlyFollowers,
             initData.tokenName,
             initData.tokenSymbol,
@@ -588,22 +616,30 @@ contract AuctionActionModule is
      */
     function _processCollectFee(uint256 profileId, uint256 pubId) internal {
         _auctionDataByPubByProfile[profileId][pubId].feeProcessed = true;
-        uint256 referrerProfileId = _referrerProfileIdByPubByProfile[profileId][
-            pubId
-        ][_auctionDataByPubByProfile[profileId][pubId].winner.profileOwner];
-        if (referrerProfileId == profileId) {
+        uint256[] storage referrerProfileIds = _referrerProfileIdByPubByProfile[
+            profileId
+        ][pubId][
+            _auctionDataByPubByProfile[profileId][pubId].winner.profileOwner
+        ];
+
+        RecipientData[] memory recipients = _recipientsByPublicationByProfile[
+            profileId
+        ][pubId];
+        if (
+            referrerProfileIds.length == 0 || referrerProfileIds[0] == profileId
+        ) {
             _processCollectFeeWithoutReferral(
                 _auctionDataByPubByProfile[profileId][pubId].winningBid,
                 _auctionDataByPubByProfile[profileId][pubId].currency,
-                _auctionDataByPubByProfile[profileId][pubId].recipient
+                recipients
             );
         } else {
             _processCollectFeeWithReferral(
                 _auctionDataByPubByProfile[profileId][pubId].winningBid,
                 _auctionDataByPubByProfile[profileId][pubId].referralFee,
-                referrerProfileId,
+                referrerProfileIds,
                 _auctionDataByPubByProfile[profileId][pubId].currency,
-                _auctionDataByPubByProfile[profileId][pubId].recipient
+                recipients
             );
         }
         emit FeeProcessed(profileId, pubId, block.timestamp);
@@ -614,20 +650,36 @@ contract AuctionActionModule is
      *
      * @param winnerBid The amount of the winner bid.
      * @param currency The currency in which the bids are denominated.
-     * @param recipient The recipient of the auction's winner bid amount.
+     * @param recipients The recipients of the auction's winner bid amount.
      */
     function _processCollectFeeWithoutReferral(
         uint256 winnerBid,
         address currency,
-        address recipient
+        RecipientData[] memory recipients
     ) internal {
         (address treasury, uint16 treasuryFee) = _treasuryData();
 
         uint256 treasuryAmount = (winnerBid * treasuryFee) / BPS_MAX;
         uint256 adjustedAmount = winnerBid - treasuryAmount;
-        IERC20(currency).safeTransfer(recipient, adjustedAmount);
+
         if (treasuryAmount > 0) {
             IERC20(currency).safeTransfer(treasury, treasuryAmount);
+        }
+
+        uint256 len = recipients.length;
+
+        uint256 i;
+        while (i < len) {
+            uint256 amountForRecipient = (adjustedAmount *
+                recipients[i].split) / BPS_MAX;
+            if (amountForRecipient != 0)
+                IERC20(currency).safeTransfer(
+                    recipients[i].recipient,
+                    amountForRecipient
+                );
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -638,33 +690,68 @@ contract AuctionActionModule is
      * @param winnerBid The amount of the winner bid.
      * @param referralFee The percentage of the fee that will be transferred to the referrer in case of having one.
      * Measured in basis points, each basis point represents 0.01%.
-     * @param referrerProfileId The token ID of the referrer's profile.
+     * @param referrerProfileIds The token IDs of the referrers' profiles.
      * @param currency The currency in which the bids are denominated.
-     * @param recipient The recipient of the auction's winner bid amount.
+     * @param recipients The recipient of the auction's winner bid amount.
      */
     function _processCollectFeeWithReferral(
         uint256 winnerBid,
         uint16 referralFee,
-        uint256 referrerProfileId,
+        uint256[] storage referrerProfileIds,
         address currency,
-        address recipient
+        RecipientData[] memory recipients
     ) internal {
         (address treasury, uint16 treasuryFee) = _treasuryData();
         uint256 treasuryAmount = (winnerBid * treasuryFee) / BPS_MAX;
         uint256 adjustedAmount = winnerBid - treasuryAmount;
+
+        if (treasuryAmount > 0) {
+            IERC20(currency).safeTransfer(treasury, treasuryAmount);
+        }
+
+        uint256 totalReferralsAmount;
         if (referralFee > 0) {
             // The reason we levy the referral fee on the adjusted amount is so that referral fees
             // don't bypass the treasury fee, in essence referrals pay their fair share to the treasury.
-            uint256 referralAmount = (adjustedAmount * referralFee) / BPS_MAX;
-            adjustedAmount = adjustedAmount - referralAmount;
-            IERC20(currency).safeTransfer(
-                IERC721(HUB).ownerOf(referrerProfileId),
-                referralAmount
-            );
+            totalReferralsAmount = (adjustedAmount * referralFee) / BPS_MAX;
+            uint256 numberOfReferrals = referrerProfileIds.length;
+            uint256 amountPerReferral = totalReferralsAmount /
+                numberOfReferrals;
+            if (amountPerReferral > 0) {
+                uint256 i;
+                while (i < numberOfReferrals) {
+                    address referralRecipient = IERC721(PROFILE_NFT).ownerOf(
+                        referrerProfileIds[i]
+                    );
+
+                    // Send referral fee in ERC20 tokens
+                    IERC20(currency).safeTransfer(
+                        referralRecipient,
+                        amountPerReferral
+                    );
+                    unchecked {
+                        ++i;
+                    }
+                }
+            }
         }
-        IERC20(currency).safeTransfer(recipient, adjustedAmount);
-        if (treasuryAmount > 0) {
-            IERC20(currency).safeTransfer(treasury, treasuryAmount);
+
+        adjustedAmount -= totalReferralsAmount;
+
+        uint256 len = recipients.length;
+
+        uint256 j;
+        while (j < len) {
+            uint256 amountForRecipient = (adjustedAmount *
+                recipients[j].split) / BPS_MAX;
+            if (amountForRecipient != 0)
+                IERC20(currency).safeTransfer(
+                    recipients[j].recipient,
+                    amountForRecipient
+                );
+            unchecked {
+                ++j;
+            }
         }
     }
 
@@ -674,7 +761,7 @@ contract AuctionActionModule is
      *
      * @param profileId The token ID of the profile associated with the underlying publication.
      * @param pubId The publication ID associated with the underlying publication.
-     * @param referrerProfileId The token ID of the referrer's profile.
+     * @param referrerProfileIds The token IDs of the referrers' profiles.
      * @param amount The bid amount to offer.
      * @param bidderOwner The owner's address of the bidder profile.
      * @param bidderProfileId The token ID of the bidder profile
@@ -683,7 +770,7 @@ contract AuctionActionModule is
     function _bid(
         uint256 profileId,
         uint256 pubId,
-        uint256 referrerProfileId,
+        uint256[] memory referrerProfileIds,
         uint256 amount,
         address bidderOwner,
         uint256 bidderProfileId,
@@ -693,10 +780,10 @@ contract AuctionActionModule is
             pubId
         ];
         _validateBid(profileId, amount, bidderProfileId, auction);
-        uint256 referrerProfileIdSet = _setReferrerProfileIdIfNotAlreadySet(
+        _setReferrerProfileIdIfNotAlreadySet(
             profileId,
             pubId,
-            referrerProfileId,
+            referrerProfileIds,
             bidderOwner
         );
         Winner memory newWinner = Winner({
@@ -726,7 +813,7 @@ contract AuctionActionModule is
         emit BidPlaced(
             profileId,
             pubId,
-            referrerProfileIdSet == profileId ? 0 : referrerProfileIdSet,
+            _referrerProfileIdByPubByProfile[profileId][pubId][bidderOwner],
             amount,
             bidderOwner,
             bidderProfileId,
@@ -813,27 +900,26 @@ contract AuctionActionModule is
      *
      * @param profileId The token ID of the profile associated with the underlying publication.
      * @param pubId The publication ID associated with the underlying publication.
-     * @param referrerProfileId The token ID of the referrer's profile.
+     * @param referrerProfileIds The token IDs of the referrers' profiles.
      * @param bidder The address of the bidder whose referrer profile id is being set.
-     *
-     * @return The token ID of the referrer profile for the given bidder. Being equals to `profileId` means no referrer.
      */
     function _setReferrerProfileIdIfNotAlreadySet(
         uint256 profileId,
         uint256 pubId,
-        uint256 referrerProfileId,
+        uint256[] memory referrerProfileIds,
         address bidder
-    ) internal returns (uint256) {
-        uint256 referrerProfileIdSet = _referrerProfileIdByPubByProfile[
-            profileId
-        ][pubId][bidder];
-        if (referrerProfileIdSet == 0) {
+    ) internal {
+        uint256[]
+            storage referrerProfileIdsSet = _referrerProfileIdByPubByProfile[
+                profileId
+            ][pubId][bidder];
+        if (
+            referrerProfileIdsSet.length == 0 || referrerProfileIdsSet[0] == 0
+        ) {
             _referrerProfileIdByPubByProfile[profileId][pubId][
                 bidder
-            ] = referrerProfileId;
-            referrerProfileIdSet = referrerProfileId;
+            ] = referrerProfileIds;
         }
-        return referrerProfileIdSet;
     }
 
     /**
@@ -856,6 +942,41 @@ contract AuctionActionModule is
                         amount - auction.winningBid < auction.minBidIncrement)))
         ) {
             revert InsufficientBidAmount();
+        }
+    }
+
+    function _validateAndStoreRecipients(
+        RecipientData[] memory recipients,
+        uint256 profileId,
+        uint256 pubId
+    ) internal {
+        uint256 len = recipients.length;
+
+        // Check number of recipients is supported min 1 max 5
+        if (len < 1) {
+            revert Errors.InitParamsInvalid();
+        }
+
+        if (len > 5) {
+            revert TooManyRecipients();
+        }
+
+        // Check recipient splits sum to 10 000 BPS (100%)
+        uint256 totalSplits;
+        uint256 i;
+        while (i < len) {
+            if (recipients[i].split == 0) revert RecipientSplitCannotBeZero();
+            totalSplits += recipients[i].split;
+            _recipientsByPublicationByProfile[profileId][pubId].push(
+                recipients[i]
+            );
+            unchecked {
+                ++i;
+            }
+        }
+
+        if (totalSplits != BPS_MAX) {
+            revert InvalidRecipientSplits();
         }
     }
 }

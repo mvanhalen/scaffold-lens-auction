@@ -42,6 +42,16 @@ const deployAuctionActionModuleContract: DeployFunction = async function (hre: H
     lensGovernable = LENS_HUB;
   }
 
+  let profileNFT: string | undefined;
+  try {
+    const { address } = await get("MockProfileNFT");
+    profileNFT = address;
+  } catch (e) {}
+
+  if (!profileNFT) {
+    profileNFT = LENS_HUB;
+  }
+
   let moduleRegistry: string | undefined;
   try {
     const { address } = await get("ModuleRegistry");
@@ -64,7 +74,7 @@ const deployAuctionActionModuleContract: DeployFunction = async function (hre: H
 
   await deploy("AuctionActionModule", {
     from: deployer,
-    args: [lensHubAddress, lensGovernable, moduleRegistry, collectNFT],
+    args: [lensHubAddress, lensGovernable, profileNFT, moduleRegistry, collectNFT],
     log: true,
     // autoMine: can be passed to the deploy function to make the deployment process faster on local networks by
     // automatically mining the contract deployment transaction. There is no effect on live networks.
