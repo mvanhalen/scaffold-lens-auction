@@ -13,10 +13,30 @@ import { COLLECT_NFT, LENS_HUB, MODULE_REGISTRY } from "../config";
 const metadata = module({
   name: "AuctionActionModule",
   title: "Auction Open Action",
-  description: "This action allows users to open an auction for a collectible on Lens.",
-  authors: ["martijn.vanhalen@gmail.com", ""],
-  initializeCalldataABI: JSON.stringify([]),
-  processCalldataABI: JSON.stringify([]),
+  description: "English auctions for 1 of 1 Lens Collects",
+  authors: ["adonoso@itba.edu.ar", "paul@paulburke.co", "martijn.vanhalen@gmail.com"],
+  initializeCalldataABI: JSON.stringify([
+    { name: "availableSinceTimestamp", type: "uint64" },
+    { name: "duration", type: "uint32" },
+    { name: "minTimeAfterBid", type: "uint32" },
+    { name: "reservePrice", type: "uint256" },
+    { name: "minBidIncrement", type: "uint256" },
+    { name: "referralFee", type: "uint16" },
+    { name: "currency", type: "address" },
+    {
+      name: "recipients",
+      type: "tuple(address,uint16)[]",
+      components: [
+        { name: "recipient", type: "address" },
+        { name: "split", type: "uint16" },
+      ],
+    },
+    { name: "onlyFollowers", type: "bool" },
+    { name: "tokenName", type: "bytes32" },
+    { name: "tokenSymbol", type: "bytes32" },
+    { name: "tokenRoyalty", type: "uint16" },
+  ]),
+  processCalldataABI: JSON.stringify([{ name: "amount", type: "uint256" }]),
   attributes: [],
 });
 
