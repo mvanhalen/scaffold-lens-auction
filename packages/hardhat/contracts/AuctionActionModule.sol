@@ -279,24 +279,9 @@ contract AuctionActionModule is
         }
     }
 
-    /**
-     * @dev See `AuctionData` struct's natspec in order to understand `data` decoded values.
-     *
-     *
-     */
-    function initializePublicationAction(
-        uint256 profileId,
-        uint256 pubId,
-        address transactionExecutor,
+    function decodeInitParams(
         bytes calldata data
-    ) external override onlyHub returns (bytes memory) {
-        emit InitializedPublicationAction(
-            profileId,
-            pubId,
-            transactionExecutor,
-            data
-        );
-
+    ) internal pure returns (InitAuctionData memory) {
         (
             uint64 availableSinceTimestamp,
             uint32 duration,
@@ -328,20 +313,42 @@ contract AuctionActionModule is
                 )
             );
 
-        InitAuctionData memory initData = InitAuctionData({
-            availableSinceTimestamp: availableSinceTimestamp,
-            duration: duration,
-            minTimeAfterBid: minTimeAfterBid,
-            reservePrice: reservePrice,
-            minBidIncrement: minBidIncrement,
-            referralFee: referralFee,
-            currency: currency,
-            recipients: recipients,
-            onlyFollowers: onlyFollowers,
-            tokenName: tokenName,
-            tokenSymbol: tokenSymbol,
-            tokenRoyalty: tokenRoyalty
-        });
+        return
+            InitAuctionData({
+                availableSinceTimestamp: availableSinceTimestamp,
+                duration: duration,
+                minTimeAfterBid: minTimeAfterBid,
+                reservePrice: reservePrice,
+                minBidIncrement: minBidIncrement,
+                referralFee: referralFee,
+                currency: currency,
+                recipients: recipients,
+                onlyFollowers: onlyFollowers,
+                tokenName: tokenName,
+                tokenSymbol: tokenSymbol,
+                tokenRoyalty: tokenRoyalty
+            });
+    }
+
+    /**
+     * @dev See `AuctionData` struct's natspec in order to understand `data` decoded values.
+     *
+     *
+     */
+    function initializePublicationAction(
+        uint256 profileId,
+        uint256 pubId,
+        address transactionExecutor,
+        bytes calldata data
+    ) external override onlyHub returns (bytes memory) {
+        emit InitializedPublicationAction(
+            profileId,
+            pubId,
+            transactionExecutor,
+            data
+        );
+
+        InitAuctionData memory initData = decodeInitParams(data);
 
         _validateInitParams(initData);
         _validateAndStoreRecipients(initData.recipients, profileId, pubId);
