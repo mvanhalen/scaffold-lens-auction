@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import {
-  AuctionActionModule,
+  AuctionCollectAction,
   CustomCollectNFT,
   MockLensGovernable,
   MockProfileNFT,
@@ -16,14 +16,14 @@ import { encodeBytes32String } from "ethers";
 // - ensure winner has NFT in wallet after claiming
 // - follower-only bidding
 
-describe("AuctionActionModule", () => {
+describe("AuctionCollectAction", () => {
   const PROFILE_ID = 1;
   const PUBLICATION_ID = 1;
   const FIRST_BIDDER_PROFILE_ID = 2;
   const SECOND_BIDDER_PROFILE_ID = 3;
   const BPS_MAX = 10000n;
 
-  let auctionAction: AuctionActionModule;
+  let auctionAction: AuctionCollectAction;
   let testToken: TestToken;
   let moduleRegistry: ModuleRegistry;
   let collectNFT: CustomCollectNFT;
@@ -71,8 +71,8 @@ describe("AuctionActionModule", () => {
     collectNFT = await CollectNFT.deploy(lensHubAddress, getNextContractAddress(lensHubAddress));
 
     // Deploy a new TipActionModule contract for each test
-    const AuctionActionModule = await ethers.getContractFactory("AuctionActionModule");
-    auctionAction = await AuctionActionModule.deploy(
+    const AuctionCollectAction = await ethers.getContractFactory("AuctionCollectAction");
+    auctionAction = await AuctionCollectAction.deploy(
       lensHubAddress,
       await mockLensGovernable.getAddress(),
       await profileNFT.getAddress(),

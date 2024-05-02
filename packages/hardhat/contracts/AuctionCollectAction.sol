@@ -121,7 +121,7 @@ error ModuleDataMismatch();
  * @notice This module works by creating an English auction for the underlying publication. After the auction ends, only
  * the auction winner is allowed to collect the publication.
  */
-contract AuctionActionModule is
+contract AuctionCollectAction is
     IPublicationActionModule,
     HubRestricted,
     LensModuleMetadata,
