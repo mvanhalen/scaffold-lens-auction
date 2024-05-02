@@ -11,10 +11,10 @@ import { COLLECT_NFT, LENS_HUB, MODULE_REGISTRY } from "../config";
  * https://docs.lens.xyz/docs/module-metadata-standard
  */
 const metadata = module({
-  name: "YourActionModule",
-  title: "Your Open Action",
-  description: "Description of your action",
-  authors: ["some@email.com"],
+  name: "AuctionActionModule",
+  title: "Auction Open Action",
+  description: "This action allows users to open an auction for a collectible on Lens.",
+  authors: ["martijn.vanhalen@gmail.com", ""],
   initializeCalldataABI: JSON.stringify([]),
   processCalldataABI: JSON.stringify([]),
   attributes: [],
