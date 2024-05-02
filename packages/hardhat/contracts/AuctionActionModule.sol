@@ -116,7 +116,7 @@ error ModuleDataMismatch();
 
 /**
  * @title AuctionCollectActionModule
- * @author Lens Protocol, Martijn van Halen and Paul Burke
+ * @author donosonaumczuk, Martijn van Halen and Paul Burke
  *
  * @notice This module works by creating an English auction for the underlying publication. After the auction ends, only
  * the auction winner is allowed to collect the publication.
@@ -173,7 +173,7 @@ contract AuctionActionModule is
     event BidPlaced(
         uint256 indexed profileId,
         uint256 indexed pubId,
-        uint256 referrerProfileId,
+        uint256[] referrerProfileIds,
         uint256 amount,
         address bidderOwner,
         uint256 bidderProfileId,
@@ -238,11 +238,11 @@ contract AuctionActionModule is
         internal _recipientsByPublicationByProfile;
 
     /**
-     * @dev Maps a given bidder's address to its referrer profile ID. Referrer matching publication's profile ID means
+     * @dev Maps a given bidder's address to its referrer profile IDs. Referrer matching publication's profile ID means
      * no referral, referrer being zero means that bidder has not bidded yet on this auction.
      * The referrer is set through, and only through, the first bidder's bid on each auction.
      */
-    mapping(uint256 profileId => mapping(uint256 pubId => mapping(address bidderAddress => uint256 referrerProfileId)))
+    mapping(uint256 profileId => mapping(uint256 pubId => mapping(address bidderAddress => uint256[] referrerProfileIds)))
         internal _referrerProfileIdByPubByProfile;
 
     constructor(
@@ -380,7 +380,7 @@ contract AuctionActionModule is
         _bid(
             params.publicationActedProfileId,
             params.publicationActedId,
-            params.publicationActedProfileId,
+            params.referrerProfileIds,
             amount,
             params.actorProfileOwner,
             bidderProfileId,
@@ -575,26 +575,6 @@ contract AuctionActionModule is
     }
 
     /**
-     * @notice Returns the referrer profile in the given publication's auction.
-     *
-     * @param profileId The token ID of the profile associated with the underlying publication.
-     * @param pubId The publication ID associated with the underlying publication.
-     * @param bidder The address whose referrer profile should be returned.
-     *
-     * @return The ID of the referrer profile. Zero means no referral.
-     */
-    function getReferrerProfileIdOf(
-        uint256 profileId,
-        uint256 pubId,
-        address bidder
-    ) external view returns (uint256) {
-        uint256 referrerProfileId = _referrerProfileIdByPubByProfile[profileId][
-            pubId
-        ][bidder];
-        return referrerProfileId == profileId ? 0 : referrerProfileId;
-    }
-
-    /**
      * @notice Initializes the auction struct for the given publication.
      *
      * @dev Auction initialization logic moved to this function to avoid stack too deep error.
@@ -664,14 +644,18 @@ contract AuctionActionModule is
      */
     function _processCollectFee(uint256 profileId, uint256 pubId) internal {
         _auctionDataByPubByProfile[profileId][pubId].feeProcessed = true;
-        uint256 referrerProfileId = _referrerProfileIdByPubByProfile[profileId][
-            pubId
-        ][_auctionDataByPubByProfile[profileId][pubId].winner.profileOwner];
+        uint256[] storage referrerProfileIds = _referrerProfileIdByPubByProfile[
+            profileId
+        ][pubId][
+            _auctionDataByPubByProfile[profileId][pubId].winner.profileOwner
+        ];
 
         RecipientData[] memory recipients = _recipientsByPublicationByProfile[
             profileId
         ][pubId];
-        if (referrerProfileId == profileId) {
+        if (
+            referrerProfileIds.length == 0 || referrerProfileIds[0] == profileId
+        ) {
             _processCollectFeeWithoutReferral(
                 _auctionDataByPubByProfile[profileId][pubId].winningBid,
                 _auctionDataByPubByProfile[profileId][pubId].currency,
@@ -681,7 +665,7 @@ contract AuctionActionModule is
             _processCollectFeeWithReferral(
                 _auctionDataByPubByProfile[profileId][pubId].winningBid,
                 _auctionDataByPubByProfile[profileId][pubId].referralFee,
-                referrerProfileId,
+                referrerProfileIds,
                 _auctionDataByPubByProfile[profileId][pubId].currency,
                 recipients
             );
@@ -734,14 +718,14 @@ contract AuctionActionModule is
      * @param winnerBid The amount of the winner bid.
      * @param referralFee The percentage of the fee that will be transferred to the referrer in case of having one.
      * Measured in basis points, each basis point represents 0.01%.
-     * @param referrerProfileId The token ID of the referrer's profile.
+     * @param referrerProfileIds The token IDs of the referrers' profiles.
      * @param currency The currency in which the bids are denominated.
      * @param recipients The recipient of the auction's winner bid amount.
      */
     function _processCollectFeeWithReferral(
         uint256 winnerBid,
         uint16 referralFee,
-        uint256 referrerProfileId,
+        uint256[] storage referrerProfileIds,
         address currency,
         RecipientData[] memory recipients
     ) internal {
@@ -753,31 +737,48 @@ contract AuctionActionModule is
             IERC20(currency).safeTransfer(treasury, treasuryAmount);
         }
 
+        uint256 totalReferralsAmount;
         if (referralFee > 0) {
             // The reason we levy the referral fee on the adjusted amount is so that referral fees
             // don't bypass the treasury fee, in essence referrals pay their fair share to the treasury.
-            uint256 referralAmount = (adjustedAmount * referralFee) / BPS_MAX;
-            adjustedAmount = adjustedAmount - referralAmount;
+            totalReferralsAmount = (adjustedAmount * referralFee) / BPS_MAX;
+            uint256 numberOfReferrals = referrerProfileIds.length;
+            uint256 amountPerReferral = totalReferralsAmount /
+                numberOfReferrals;
+            if (amountPerReferral > 0) {
+                uint256 i;
+                while (i < numberOfReferrals) {
+                    address referralRecipient = IERC721(HUB).ownerOf(
+                        referrerProfileIds[i]
+                    );
 
-            IERC20(currency).safeTransfer(
-                IERC721(HUB).ownerOf(referrerProfileId),
-                referralAmount
-            );
+                    // Send referral fee in ERC20 tokens
+                    IERC20(currency).safeTransfer(
+                        referralRecipient,
+                        amountPerReferral
+                    );
+                    unchecked {
+                        ++i;
+                    }
+                }
+            }
         }
+
+        adjustedAmount -= totalReferralsAmount;
 
         uint256 len = recipients.length;
 
-        uint256 i;
-        while (i < len) {
+        uint256 j;
+        while (j < len) {
             uint256 amountForRecipient = (adjustedAmount *
-                recipients[i].split) / BPS_MAX;
+                recipients[j].split) / BPS_MAX;
             if (amountForRecipient != 0)
                 IERC20(currency).safeTransfer(
-                    recipients[i].recipient,
+                    recipients[j].recipient,
                     amountForRecipient
                 );
             unchecked {
-                ++i;
+                ++j;
             }
         }
     }
@@ -788,7 +789,7 @@ contract AuctionActionModule is
      *
      * @param profileId The token ID of the profile associated with the underlying publication.
      * @param pubId The publication ID associated with the underlying publication.
-     * @param referrerProfileId The token ID of the referrer's profile.
+     * @param referrerProfileIds The token IDs of the referrers' profiles.
      * @param amount The bid amount to offer.
      * @param bidderOwner The owner's address of the bidder profile.
      * @param bidderProfileId The token ID of the bidder profile
@@ -797,7 +798,7 @@ contract AuctionActionModule is
     function _bid(
         uint256 profileId,
         uint256 pubId,
-        uint256 referrerProfileId,
+        uint256[] memory referrerProfileIds,
         uint256 amount,
         address bidderOwner,
         uint256 bidderProfileId,
@@ -807,10 +808,10 @@ contract AuctionActionModule is
             pubId
         ];
         _validateBid(profileId, amount, bidderProfileId, auction);
-        uint256 referrerProfileIdSet = _setReferrerProfileIdIfNotAlreadySet(
+        _setReferrerProfileIdIfNotAlreadySet(
             profileId,
             pubId,
-            referrerProfileId,
+            referrerProfileIds,
             bidderOwner
         );
         Winner memory newWinner = Winner({
@@ -840,7 +841,7 @@ contract AuctionActionModule is
         emit BidPlaced(
             profileId,
             pubId,
-            referrerProfileIdSet == profileId ? 0 : referrerProfileIdSet,
+            _referrerProfileIdByPubByProfile[profileId][pubId][bidderOwner],
             amount,
             bidderOwner,
             bidderProfileId,
@@ -927,7 +928,7 @@ contract AuctionActionModule is
      *
      * @param profileId The token ID of the profile associated with the underlying publication.
      * @param pubId The publication ID associated with the underlying publication.
-     * @param referrerProfileId The token ID of the referrer's profile.
+     * @param referrerProfileIds The token IDs of the referrers' profiles.
      * @param bidder The address of the bidder whose referrer profile id is being set.
      *
      * @return The token ID of the referrer profile for the given bidder. Being equals to `profileId` means no referrer.
@@ -935,19 +936,21 @@ contract AuctionActionModule is
     function _setReferrerProfileIdIfNotAlreadySet(
         uint256 profileId,
         uint256 pubId,
-        uint256 referrerProfileId,
+        uint256[] memory referrerProfileIds,
         address bidder
-    ) internal returns (uint256) {
-        uint256 referrerProfileIdSet = _referrerProfileIdByPubByProfile[
-            profileId
-        ][pubId][bidder];
-        if (referrerProfileIdSet == 0) {
+    ) internal returns (uint256[] storage) {
+        uint256[]
+            storage referrerProfileIdsSet = _referrerProfileIdByPubByProfile[
+                profileId
+            ][pubId][bidder];
+        if (
+            referrerProfileIdsSet.length == 0 || referrerProfileIdsSet[0] == 0
+        ) {
             _referrerProfileIdByPubByProfile[profileId][pubId][
                 bidder
-            ] = referrerProfileId;
-            referrerProfileIdSet = referrerProfileId;
+            ] = referrerProfileIds;
         }
-        return referrerProfileIdSet;
+        return referrerProfileIdsSet;
     }
 
     /**

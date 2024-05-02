@@ -21,6 +21,7 @@ describe("AuctionActionModule", () => {
   const PUBLICATION_ID = 1;
   const FIRST_BIDDER_PROFILE_ID = 2;
   const SECOND_BIDDER_PROFILE_ID = 3;
+  const BPS_MAX = 10000n;
 
   let auctionAction: AuctionActionModule;
   let testToken: TestToken;
@@ -33,6 +34,7 @@ describe("AuctionActionModule", () => {
   let firstBidderAddress: string;
   let secondBidderAddress: string;
   let tokenAddress: string;
+  let treasuryFee: bigint;
 
   beforeEach(async () => {
     const [lensHub, author, firstBidder, secondBidder] = await ethers.getSigners();
@@ -51,6 +53,7 @@ describe("AuctionActionModule", () => {
 
     const LensGovernable = await ethers.getContractFactory("MockLensGovernable");
     mockLensGovernable = await LensGovernable.deploy(lensHubAddress, 1000);
+    treasuryFee = await mockLensGovernable.getTreasuryFee();
 
     // Deploy a new mock ModuleRegistry contract
     const ModuleRegistry = await ethers.getContractFactory("ModuleRegistry");
@@ -245,7 +248,7 @@ describe("AuctionActionModule", () => {
       .withArgs(
         PROFILE_ID,
         PUBLICATION_ID,
-        0,
+        [],
         amount,
         firstBidderAddress,
         FIRST_BIDDER_PROFILE_ID,
@@ -302,7 +305,7 @@ describe("AuctionActionModule", () => {
       .withArgs(
         PROFILE_ID,
         PUBLICATION_ID,
-        0,
+        [],
         amount,
         secondBidderAddress,
         SECOND_BIDDER_PROFILE_ID,
@@ -638,7 +641,7 @@ describe("AuctionActionModule", () => {
       .withArgs(
         PROFILE_ID,
         PUBLICATION_ID,
-        0,
+        [],
         amount,
         firstBidderAddress,
         FIRST_BIDDER_PROFILE_ID,
@@ -673,5 +676,34 @@ describe("AuctionActionModule", () => {
     });
 
     await expect(tx).to.revertedWithCustomError(auctionAction, "InsufficientBidAmount");
+  });
+
+  // test referrals
+  it("Referral fee is paid to referrer", async () => {
+    const referrerStartingBalance = await testToken.balanceOf(secondBidderAddress);
+
+    await initialize({
+      referralFee: 1000, // 10%
+    });
+
+    const amount = ethers.parseEther("1");
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+
+    await auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [SECOND_BIDDER_PROFILE_ID],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: data,
+    });
+
+    // Ensure the referrer has received the fee
+    const referrerBalance = await testToken.balanceOf(secondBidderAddress);
+    const adjustedAmount = amount - amount * (treasuryFee / BPS_MAX);
+    expect(referrerBalance).to.equal(referrerStartingBalance + adjustedAmount / 10n);
   });
 });
