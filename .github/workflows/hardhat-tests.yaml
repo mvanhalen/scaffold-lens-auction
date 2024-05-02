@@ -28,7 +28,7 @@ jobs:
           cache: yarn
 
       - name: Install dependencies
-        run: yarn install --immutable --immutable-cache --check-cache
+        run: yarn cache clean & yarn install --immutable
 
       - name: Run hardhat tests
-        run: yarn compile & yarn test
+        run: yarn test
