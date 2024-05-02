@@ -227,6 +227,7 @@ contract AuctionActionModule is
 
     address public immutable COLLECT_NFT_IMPL;
     address public immutable TREASURY;
+    address public immutable PROFILE_NFT;
 
     mapping(uint256 profileId => mapping(uint256 pubId => address collectNFT))
         internal _collectNFTByPub;
@@ -248,6 +249,7 @@ contract AuctionActionModule is
     constructor(
         address hub,
         address treasury,
+        address profileNFT,
         IModuleRegistry moduleRegistry,
         address collectNFTImpl
     )
@@ -257,6 +259,7 @@ contract AuctionActionModule is
         LensModuleRegistrant(moduleRegistry)
     {
         TREASURY = treasury;
+        PROFILE_NFT = profileNFT;
         COLLECT_NFT_IMPL = collectNFTImpl;
     }
 
@@ -544,37 +547,6 @@ contract AuctionActionModule is
     }
 
     /**
-     * @notice Processes the collect fees using the auction winning bid funds and taking into account referrer and
-     * treasury fees if necessary.
-     *
-     * @dev This function allows anyone to process the collect fees, not needing to wait for `processCollect` to be
-     * called, as long as the auction has finished, has a winner and the publication has not been collected yet.
-     *
-     * @param profileId The token ID of the profile associated with the underlying publication.
-     * @param pubId The publication ID associated with the underlying publication.
-     */
-    function processCollectFee(uint256 profileId, uint256 pubId) external {
-        if (
-            _auctionDataByPubByProfile[profileId][pubId].duration == 0 ||
-            block.timestamp <
-            _auctionDataByPubByProfile[profileId][pubId].availableSinceTimestamp
-        ) {
-            revert UnavailableAuction();
-        }
-        if (
-            _auctionDataByPubByProfile[profileId][pubId].startTimestamp == 0 ||
-            block.timestamp <=
-            _auctionDataByPubByProfile[profileId][pubId].endTimestamp
-        ) {
-            revert OngoingAuction();
-        }
-        if (_auctionDataByPubByProfile[profileId][pubId].feeProcessed) {
-            revert FeeAlreadyProcessed();
-        }
-        _processCollectFee(profileId, pubId);
-    }
-
-    /**
      * @notice Initializes the auction struct for the given publication.
      *
      * @dev Auction initialization logic moved to this function to avoid stack too deep error.
@@ -748,7 +720,7 @@ contract AuctionActionModule is
             if (amountPerReferral > 0) {
                 uint256 i;
                 while (i < numberOfReferrals) {
-                    address referralRecipient = IERC721(HUB).ownerOf(
+                    address referralRecipient = IERC721(PROFILE_NFT).ownerOf(
                         referrerProfileIds[i]
                     );
 
@@ -930,15 +902,13 @@ contract AuctionActionModule is
      * @param pubId The publication ID associated with the underlying publication.
      * @param referrerProfileIds The token IDs of the referrers' profiles.
      * @param bidder The address of the bidder whose referrer profile id is being set.
-     *
-     * @return The token ID of the referrer profile for the given bidder. Being equals to `profileId` means no referrer.
      */
     function _setReferrerProfileIdIfNotAlreadySet(
         uint256 profileId,
         uint256 pubId,
         uint256[] memory referrerProfileIds,
         address bidder
-    ) internal returns (uint256[] storage) {
+    ) internal {
         uint256[]
             storage referrerProfileIdsSet = _referrerProfileIdByPubByProfile[
                 profileId
@@ -950,7 +920,6 @@ contract AuctionActionModule is
                 bidder
             ] = referrerProfileIds;
         }
-        return referrerProfileIdsSet;
     }
 
     /**

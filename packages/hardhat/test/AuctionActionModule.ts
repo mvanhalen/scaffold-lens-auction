@@ -4,6 +4,7 @@ import {
   AuctionActionModule,
   CustomCollectNFT,
   MockLensGovernable,
+  MockProfileNFT,
   ModuleRegistry,
   TestToken,
 } from "../typechain-types";
@@ -12,7 +13,6 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { encodeBytes32String } from "ethers";
 
 //Todo
-// - referrals
 // - ensure winner has NFT in wallet after claiming
 // - follower-only bidding
 
@@ -28,6 +28,7 @@ describe("AuctionActionModule", () => {
   let moduleRegistry: ModuleRegistry;
   let collectNFT: CustomCollectNFT;
   let mockLensGovernable: MockLensGovernable;
+  let profileNFT: MockProfileNFT;
 
   let lensHubAddress: string;
   let authorAddress: string;
@@ -55,6 +56,11 @@ describe("AuctionActionModule", () => {
     mockLensGovernable = await LensGovernable.deploy(lensHubAddress, 1000);
     treasuryFee = await mockLensGovernable.getTreasuryFee();
 
+    const ProfileNFT = await ethers.getContractFactory("MockProfileNFT");
+    profileNFT = await ProfileNFT.deploy();
+    await profileNFT.mint(firstBidderAddress, FIRST_BIDDER_PROFILE_ID);
+    await profileNFT.mint(secondBidderAddress, SECOND_BIDDER_PROFILE_ID);
+
     // Deploy a new mock ModuleRegistry contract
     const ModuleRegistry = await ethers.getContractFactory("ModuleRegistry");
     moduleRegistry = await ModuleRegistry.deploy();
@@ -69,6 +75,7 @@ describe("AuctionActionModule", () => {
     auctionAction = await AuctionActionModule.deploy(
       lensHubAddress,
       await mockLensGovernable.getAddress(),
+      await profileNFT.getAddress(),
       await moduleRegistry.getAddress(),
       await collectNFT.getAddress(),
     );
@@ -678,7 +685,6 @@ describe("AuctionActionModule", () => {
     await expect(tx).to.revertedWithCustomError(auctionAction, "InsufficientBidAmount");
   });
 
-  // test referrals
   it("Referral fee is paid to referrer", async () => {
     const referrerStartingBalance = await testToken.balanceOf(secondBidderAddress);
 
@@ -701,9 +707,16 @@ describe("AuctionActionModule", () => {
       actionModuleData: data,
     });
 
+    // Increase time to end the auction
+    await ethers.provider.send("evm_increaseTime", [60]);
+    await ethers.provider.send("evm_mine", []);
+
+    // Claim to trigger fee collection
+    await auctionAction.claim(PROFILE_ID, PUBLICATION_ID);
+
     // Ensure the referrer has received the fee
     const referrerBalance = await testToken.balanceOf(secondBidderAddress);
-    const adjustedAmount = amount - amount * (treasuryFee / BPS_MAX);
+    const adjustedAmount = amount - (amount * treasuryFee) / BPS_MAX;
     expect(referrerBalance).to.equal(referrerStartingBalance + adjustedAmount / 10n);
   });
 });
