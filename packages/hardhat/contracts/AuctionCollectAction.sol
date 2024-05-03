@@ -17,9 +17,9 @@ import {HubRestricted} from "lens-modules/contracts/base/HubRestricted.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ModuleTypes} from "lens-modules/contracts/modules/libraries/constants/ModuleTypes.sol";
-import {FollowValidationLib} from "lens-modules/contracts/modules/libraries/FollowValidationLib.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {ICustomCollectNFT} from "./interfaces/ICustomCollectNFT.sol";
+import {ILensProtocol} from "lens-modules/contracts/interfaces/ILensProtocol.sol";
 
 /**
  * @notice A struct containing recipient data.
@@ -228,6 +228,7 @@ contract AuctionCollectAction is
     address public immutable COLLECT_NFT_IMPL;
     address private immutable TREASURY;
     address private immutable PROFILE_NFT;
+    address private immutable LENS_PROTOCOL;
 
     mapping(uint256 profileId => mapping(uint256 pubId => address collectNFT))
         internal _collectNFTByPub;
@@ -250,6 +251,7 @@ contract AuctionCollectAction is
         address hub,
         address treasury,
         address profileNFT,
+        address lensProtocol,
         IModuleRegistry moduleRegistry,
         address collectNFTImpl
     )
@@ -260,6 +262,7 @@ contract AuctionCollectAction is
     {
         TREASURY = treasury;
         PROFILE_NFT = profileNFT;
+        LENS_PROTOCOL = lensProtocol;
         COLLECT_NFT_IMPL = collectNFTImpl;
     }
 
@@ -819,8 +822,26 @@ contract AuctionCollectAction is
         );
     }
 
+    function validateIsFollowingOrSelf(
+        uint256 followerProfileId,
+        uint256 followedProfileId
+    ) private view {
+        // We treat following yourself is always true
+        if (followerProfileId == followedProfileId) {
+            return;
+        }
+        if (
+            !ILensProtocol(LENS_PROTOCOL).isFollowing(
+                followerProfileId,
+                followedProfileId
+            )
+        ) {
+            revert Errors.NotFollowing();
+        }
+    }
+
     /**
-     * @notice Valides if the given bid is valid for the given auction.
+     * @notice Validates if the given bid is valid for the given auction.
      *
      * @param profileId The token ID of the profile associated with the underlying publication.
      * @param amount The bid amount to offer.
@@ -845,11 +866,7 @@ contract AuctionCollectAction is
         _validateBidAmount(auction, amount);
 
         if (auction.onlyFollowers) {
-            FollowValidationLib.validateIsFollowingOrSelf(
-                HUB,
-                profileId,
-                bidderProfileId
-            );
+            validateIsFollowingOrSelf(bidderProfileId, profileId);
         }
     }
 
