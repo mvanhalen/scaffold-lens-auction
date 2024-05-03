@@ -12,7 +12,7 @@ import { COLLECT_NFT, LENS_HUB, MODULE_REGISTRY } from "../config";
  */
 const metadata = module({
   name: "AuctionCollectAction",
-  title: "Auction Open Action",
+  title: "Auction Collect Publication Action",
   description: "English auctions for 1 of 1 Lens Collects",
   authors: ["adonoso@itba.edu.ar", "paul@paulburke.co", "martijn.vanhalen@gmail.com"],
   initializeCalldataABI: JSON.stringify([
@@ -78,7 +78,7 @@ const deployAuctionCollectActionContract: DeployFunction = async function (hre: 
 
   let collectNFT: string | undefined;
   try {
-    const { address } = await get("CollectNFT");
+    const { address } = await get("CustomCollectNFT");
     collectNFT = address;
   } catch (e) {}
 

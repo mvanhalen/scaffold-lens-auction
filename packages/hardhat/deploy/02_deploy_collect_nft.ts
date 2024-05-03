@@ -22,4 +22,4 @@ const deployCollectNFT: DeployFunction = async function (hre: HardhatRuntimeEnvi
 
 export default deployCollectNFT;
 
-deployCollectNFT.tags = ["CollectNFT"];
+deployCollectNFT.tags = ["CustomCollectNFT"];

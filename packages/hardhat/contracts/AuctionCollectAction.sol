@@ -226,8 +226,8 @@ contract AuctionCollectAction is
     );
 
     address public immutable COLLECT_NFT_IMPL;
-    address public immutable TREASURY;
-    address public immutable PROFILE_NFT;
+    address private immutable TREASURY;
+    address private immutable PROFILE_NFT;
 
     mapping(uint256 profileId => mapping(uint256 pubId => address collectNFT))
         internal _collectNFTByPub;
@@ -414,7 +414,7 @@ contract AuctionCollectAction is
 
     function bytes32ToString(
         bytes32 _bytes32
-    ) public pure returns (string memory) {
+    ) private pure returns (string memory) {
         bytes memory bytesArray = new bytes(32);
         for (uint256 i; i < 32; i++) {
             bytesArray[i] = _bytes32[i];

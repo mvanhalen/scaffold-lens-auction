@@ -16,4 +16,4 @@ artifacts
 artifacts-zk
 cache-zk
 
-deployments/*
+deployments/localhost
