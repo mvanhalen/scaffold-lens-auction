@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import {
-  AuctionActionModule,
+  AuctionCollectAction,
   CustomCollectNFT,
   MockLensGovernable,
   MockProfileNFT,
@@ -10,26 +10,33 @@ import {
 } from "../typechain-types";
 import getNextContractAddress from "../lib/get-next-contract-address";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
-import { encodeBytes32String } from "ethers";
+import { encodeBytes32String, ZeroAddress } from "ethers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-//Todo
-// - ensure winner has NFT in wallet after claiming
-// - follower-only bidding
-
-describe("AuctionActionModule", () => {
+describe("AuctionCollectAction", () => {
   const PROFILE_ID = 1;
   const PUBLICATION_ID = 1;
   const FIRST_BIDDER_PROFILE_ID = 2;
   const SECOND_BIDDER_PROFILE_ID = 3;
   const BPS_MAX = 10000n;
+  const ABI_BALANCE_OF = {
+    constant: true,
+    inputs: [{ name: "owner", type: "address" }],
+    name: "balanceOf",
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    payable: false,
+    stateMutability: "view",
+    type: "function",
+  };
 
-  let auctionAction: AuctionActionModule;
+  let auctionAction: AuctionCollectAction;
   let testToken: TestToken;
   let moduleRegistry: ModuleRegistry;
   let collectNFT: CustomCollectNFT;
   let mockLensGovernable: MockLensGovernable;
   let profileNFT: MockProfileNFT;
 
+  let firstBidder: HardhatEthersSigner;
   let lensHubAddress: string;
   let authorAddress: string;
   let firstBidderAddress: string;
@@ -38,8 +45,9 @@ describe("AuctionActionModule", () => {
   let treasuryFee: bigint;
 
   beforeEach(async () => {
-    const [lensHub, author, firstBidder, secondBidder] = await ethers.getSigners();
+    const [lensHub, author, _firstBidder, secondBidder] = await ethers.getSigners();
 
+    firstBidder = _firstBidder;
     lensHubAddress = await lensHub.getAddress();
     authorAddress = await author.getAddress();
     firstBidderAddress = await firstBidder.getAddress();
@@ -71,8 +79,8 @@ describe("AuctionActionModule", () => {
     collectNFT = await CollectNFT.deploy(lensHubAddress, getNextContractAddress(lensHubAddress));
 
     // Deploy a new TipActionModule contract for each test
-    const AuctionActionModule = await ethers.getContractFactory("AuctionActionModule");
-    auctionAction = await AuctionActionModule.deploy(
+    const AuctionCollectAction = await ethers.getContractFactory("AuctionCollectAction");
+    auctionAction = await AuctionCollectAction.deploy(
       lensHubAddress,
       await mockLensGovernable.getAddress(),
       await profileNFT.getAddress(),
@@ -234,7 +242,7 @@ describe("AuctionActionModule", () => {
     await initialize();
 
     const amount = ethers.parseEther("0.001");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     const tx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -272,10 +280,7 @@ describe("AuctionActionModule", () => {
   it("Valid higher bidder is winner", async () => {
     await initialize();
 
-    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [ethers.parseEther("0.001"), FIRST_BIDDER_PROFILE_ID],
-    );
+    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [ethers.parseEther("0.001")]);
 
     await auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -290,10 +295,7 @@ describe("AuctionActionModule", () => {
     });
 
     const amount = ethers.parseEther("0.01");
-    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [amount, SECOND_BIDDER_PROFILE_ID],
-    );
+    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     const secondTx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -329,10 +331,7 @@ describe("AuctionActionModule", () => {
   it("Bid less than current winner is insufficient", async () => {
     await initialize();
 
-    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [ethers.parseEther("0.01"), FIRST_BIDDER_PROFILE_ID],
-    );
+    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [ethers.parseEther("0.01")]);
 
     await auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -347,10 +346,7 @@ describe("AuctionActionModule", () => {
     });
 
     const amount = ethers.parseEther("0.001");
-    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [amount, SECOND_BIDDER_PROFILE_ID],
-    );
+    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     const secondTx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -370,10 +366,7 @@ describe("AuctionActionModule", () => {
   it("Bid less than minimum increment is insufficient", async () => {
     await initialize();
 
-    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [ethers.parseEther("0.001"), FIRST_BIDDER_PROFILE_ID],
-    );
+    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [ethers.parseEther("0.001")]);
 
     await auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -388,10 +381,7 @@ describe("AuctionActionModule", () => {
     });
 
     const amount = ethers.parseEther("0.0015");
-    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [amount, SECOND_BIDDER_PROFILE_ID],
-    );
+    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     const secondTx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -412,7 +402,7 @@ describe("AuctionActionModule", () => {
     await initialize();
 
     const amount = ethers.parseEther("0.001");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     await auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -446,7 +436,7 @@ describe("AuctionActionModule", () => {
     await initialize();
 
     const amount = ethers.parseEther("0.001");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
     const firstBidTx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
       publicationActedId: PUBLICATION_ID,
@@ -465,10 +455,7 @@ describe("AuctionActionModule", () => {
     await expect(claimTx).to.revertedWithCustomError(auctionAction, "OngoingAuction");
 
     const amountSecond = ethers.parseEther("0.002");
-    const dataSecond = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [amountSecond, SECOND_BIDDER_PROFILE_ID],
-    );
+    const dataSecond = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amountSecond]);
     const secondBidTx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
       publicationActedId: PUBLICATION_ID,
@@ -513,7 +500,7 @@ describe("AuctionActionModule", () => {
     });
 
     const amount = ethers.parseEther("0.001");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
     const toEarlyBidTx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
       publicationActedId: PUBLICATION_ID,
@@ -542,7 +529,7 @@ describe("AuctionActionModule", () => {
     });
 
     const amount = ethers.parseEther("0.001");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     // // Increase time to go to start of auction
     await ethers.provider.send("evm_setNextBlockTimestamp", [availableSinceTimestamp + 121]);
@@ -573,10 +560,7 @@ describe("AuctionActionModule", () => {
 
     // Place the first bid to start the auction
     const firstAmount = ethers.parseEther("0.001");
-    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [firstAmount, FIRST_BIDDER_PROFILE_ID],
-    );
+    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [firstAmount]);
     const firstBid = await auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
       publicationActedId: PUBLICATION_ID,
@@ -599,10 +583,7 @@ describe("AuctionActionModule", () => {
     await ethers.provider.send("evm_mine", []);
 
     const secondAmount = ethers.parseEther("0.01");
-    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256", "uint256"],
-      [secondAmount, FIRST_BIDDER_PROFILE_ID],
-    );
+    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [secondAmount]);
     const secondBid = await auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
       publicationActedId: PUBLICATION_ID,
@@ -629,7 +610,7 @@ describe("AuctionActionModule", () => {
     });
 
     const amount = ethers.parseEther("1");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     const tx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -668,7 +649,7 @@ describe("AuctionActionModule", () => {
     });
 
     const amount = ethers.parseEther("0.5");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     const tx = auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -693,7 +674,7 @@ describe("AuctionActionModule", () => {
     });
 
     const amount = ethers.parseEther("1");
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [amount, FIRST_BIDDER_PROFILE_ID]);
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
 
     await auctionAction.processPublicationAction({
       publicationActedProfileId: PROFILE_ID,
@@ -718,5 +699,83 @@ describe("AuctionActionModule", () => {
     const referrerBalance = await testToken.balanceOf(secondBidderAddress);
     const adjustedAmount = amount - (amount * treasuryFee) / BPS_MAX;
     expect(referrerBalance).to.equal(referrerStartingBalance + adjustedAmount / 10n);
+  });
+
+  it("Winner receives Collect NFT when claiming", async () => {
+    await initialize();
+
+    const amount = ethers.parseEther("0.001");
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
+
+    await auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: data,
+    });
+
+    // Increase time to end the auction
+    await ethers.provider.send("evm_increaseTime", [60]);
+    await ethers.provider.send("evm_mine", []);
+
+    const claimTx = auctionAction.claim(PROFILE_ID, PUBLICATION_ID);
+    await expect(claimTx)
+      .to.emit(auctionAction, "CollectNFTDeployed")
+      .withArgs(PROFILE_ID, PUBLICATION_ID, anyValue, anyValue);
+
+    const collectNFTAddress = await auctionAction.getCollectNFT(PROFILE_ID, PUBLICATION_ID);
+    expect(collectNFTAddress).not.to.equal(ZeroAddress);
+
+    const collectNFTContract = new ethers.Contract(collectNFTAddress, [ABI_BALANCE_OF], firstBidder);
+    const balance = await collectNFTContract.balanceOf(firstBidderAddress);
+    expect(balance).to.equal(1);
+  });
+
+  it("Recipients receive their share of the winning bid on claim", async () => {
+    const authorStartingBalance = await testToken.balanceOf(authorAddress);
+    const recipientStartingBalance = await testToken.balanceOf(secondBidderAddress);
+
+    await initialize({
+      recipients: [
+        [authorAddress, 5000], // 50%
+        [secondBidderAddress, 5000], // 50%
+      ],
+    });
+
+    const amount = ethers.parseEther("1");
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
+
+    await auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: data,
+    });
+
+    // Increase time to end the auction
+    await ethers.provider.send("evm_increaseTime", [60]);
+    await ethers.provider.send("evm_mine", []);
+
+    // Claim to trigger fee collection
+    await auctionAction.claim(PROFILE_ID, PUBLICATION_ID);
+
+    // Ensure the recipients have received their share
+    const adjustedAmount = amount - (amount * treasuryFee) / BPS_MAX;
+
+    const authorBalance = await testToken.balanceOf(authorAddress);
+    expect(authorBalance).to.equal(authorStartingBalance + adjustedAmount / 2n);
+
+    const recipientBalance = await testToken.balanceOf(secondBidderAddress);
+    expect(recipientBalance).to.equal(recipientStartingBalance + adjustedAmount / 2n);
   });
 });

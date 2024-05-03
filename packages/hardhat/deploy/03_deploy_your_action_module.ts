@@ -3,7 +3,7 @@ import { DeployFunction } from "hardhat-deploy/types";
 
 import { module } from "@lens-protocol/metadata";
 import { uploadMetadata } from "../lib/irys-service";
-import { AuctionActionModule } from "../typechain-types";
+import { AuctionCollectAction } from "../typechain-types";
 import { COLLECT_NFT, LENS_HUB, MODULE_REGISTRY } from "../config";
 
 /**
@@ -11,22 +11,36 @@ import { COLLECT_NFT, LENS_HUB, MODULE_REGISTRY } from "../config";
  * https://docs.lens.xyz/docs/module-metadata-standard
  */
 const metadata = module({
-  name: "AuctionActionModule",
-  title: "Auction Open Action",
-  description: "This action allows users to open an auction for a collectible on Lens.",
-  authors: ["martijn.vanhalen@gmail.com", ""],
-  initializeCalldataABI: JSON.stringify([]),
-  processCalldataABI: JSON.stringify([]),
+  name: "AuctionCollectAction",
+  title: "Auction Collect Publication Action",
+  description: "English auctions for 1 of 1 Lens Collects",
+  authors: ["adonoso@itba.edu.ar", "paul@paulburke.co", "martijn.vanhalen@gmail.com"],
+  initializeCalldataABI: JSON.stringify([
+    { name: "availableSinceTimestamp", type: "uint64" },
+    { name: "duration", type: "uint32" },
+    { name: "minTimeAfterBid", type: "uint32" },
+    { name: "reservePrice", type: "uint256" },
+    { name: "minBidIncrement", type: "uint256" },
+    { name: "referralFee", type: "uint16" },
+    { name: "currency", type: "address" },
+    {
+      name: "recipients",
+      type: "tuple(address,uint16)[]",
+      components: [
+        { name: "recipient", type: "address" },
+        { name: "split", type: "uint16" },
+      ],
+    },
+    { name: "onlyFollowers", type: "bool" },
+    { name: "tokenName", type: "bytes32" },
+    { name: "tokenSymbol", type: "bytes32" },
+    { name: "tokenRoyalty", type: "uint16" },
+  ]),
+  processCalldataABI: JSON.stringify([{ name: "amount", type: "uint256" }]),
   attributes: [],
 });
 
-/**
- * Deploys a contract named "YourActionModule" using the deployer account and
- * constructor arguments set to the deployer address
- *
- * @param hre HardhatRuntimeEnvironment object.
- */
-const deployAuctionActionModuleContract: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
+const deployAuctionCollectActionContract: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deployer } = await hre.getNamedAccounts();
   const { deploy, get } = hre.deployments;
 
@@ -64,7 +78,7 @@ const deployAuctionActionModuleContract: DeployFunction = async function (hre: H
 
   let collectNFT: string | undefined;
   try {
-    const { address } = await get("CollectNFT");
+    const { address } = await get("CustomCollectNFT");
     collectNFT = address;
   } catch (e) {}
 
@@ -72,7 +86,7 @@ const deployAuctionActionModuleContract: DeployFunction = async function (hre: H
     collectNFT = COLLECT_NFT;
   }
 
-  await deploy("AuctionActionModule", {
+  await deploy("AuctionCollectAction", {
     from: deployer,
     args: [lensHubAddress, lensGovernable, profileNFT, moduleRegistry, collectNFT],
     log: true,
@@ -82,7 +96,7 @@ const deployAuctionActionModuleContract: DeployFunction = async function (hre: H
   });
 
   // Get the deployed contract
-  const auctionActionModule = await hre.ethers.getContract<AuctionActionModule>("AuctionActionModule", deployer);
+  const auctionActionModule = await hre.ethers.getContract<AuctionCollectAction>("AuctionCollectAction", deployer);
 
   // Upload the metadata to Arweave with Irys and set the URI on the contract
   const metadataURI = await uploadMetadata(metadata);
@@ -96,8 +110,8 @@ const deployAuctionActionModuleContract: DeployFunction = async function (hre: H
   console.log("registered open action: tx=", registered.hash);
 };
 
-export default deployAuctionActionModuleContract;
+export default deployAuctionCollectActionContract;
 
 // Tags are useful if you have multiple deploy files and only want to run one of them.
 // e.g. yarn deploy --tags YourActionModule
-deployAuctionActionModuleContract.tags = ["AuctionActionModule"];
+deployAuctionCollectActionContract.tags = ["AuctionCollectAction"];

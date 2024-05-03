@@ -121,7 +121,7 @@ error ModuleDataMismatch();
  * @notice This module works by creating an English auction for the underlying publication. After the auction ends, only
  * the auction winner is allowed to collect the publication.
  */
-contract AuctionActionModule is
+contract AuctionCollectAction is
     IPublicationActionModule,
     HubRestricted,
     LensModuleMetadata,
@@ -226,8 +226,8 @@ contract AuctionActionModule is
     );
 
     address public immutable COLLECT_NFT_IMPL;
-    address public immutable TREASURY;
-    address public immutable PROFILE_NFT;
+    address private immutable TREASURY;
+    address private immutable PROFILE_NFT;
 
     mapping(uint256 profileId => mapping(uint256 pubId => address collectNFT))
         internal _collectNFTByPub;
@@ -363,7 +363,6 @@ contract AuctionActionModule is
     /**
      *  this open action makes the bid as gasless Open action
      *  params.actionModuleData contains amount The bid amount to offer.
-     *  bidderProfileId The token ID of the bidder profile.
      */
     function processPublicationAction(
         Types.ProcessActionParams calldata params
@@ -375,10 +374,7 @@ contract AuctionActionModule is
             params.actionModuleData
         );
 
-        (uint256 amount, uint256 bidderProfileId) = abi.decode(
-            params.actionModuleData,
-            (uint256, uint256)
-        );
+        uint256 amount = abi.decode(params.actionModuleData, (uint256));
 
         _bid(
             params.publicationActedProfileId,
@@ -386,7 +382,7 @@ contract AuctionActionModule is
             params.referrerProfileIds,
             amount,
             params.actorProfileOwner,
-            bidderProfileId,
+            params.actorProfileId,
             params.transactionExecutor
         );
 
@@ -418,7 +414,7 @@ contract AuctionActionModule is
 
     function bytes32ToString(
         bytes32 _bytes32
-    ) public pure returns (string memory) {
+    ) private pure returns (string memory) {
         bytes memory bytesArray = new bytes(32);
         for (uint256 i; i < 32; i++) {
             bytesArray[i] = _bytes32[i];
