@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   80002: {
     AuctionCollectAction: {
-      address: "0x20EafA085288A0C4278BbDeeC4499234366642Be",
+      address: "0x6CB9e58B5E807B27ee9Fc98bF05F5A03f35408f9",
       abi: [
         {
           inputs: [
@@ -24,6 +24,11 @@ const deployedContracts = {
             {
               internalType: "address",
               name: "profileNFT",
+              type: "address",
+            },
+            {
+              internalType: "address",
+              name: "lensProtocol",
               type: "address",
             },
             {
@@ -924,7 +929,7 @@ const deployedContracts = {
       },
     },
     CustomCollectNFT: {
-      address: "0x49c38eC04C31721b025a1643561A42dA790634b9",
+      address: "0x1620d6fdf3e964b82E0Ab5Cb67f2b061EB7DB714",
       abi: [
         {
           inputs: [
