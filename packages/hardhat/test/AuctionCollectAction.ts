@@ -4,6 +4,7 @@ import {
   AuctionCollectAction,
   CustomCollectNFT,
   MockLensGovernable,
+  MockLensProtocol,
   MockProfileNFT,
   ModuleRegistry,
   TestToken,
@@ -14,10 +15,10 @@ import { encodeBytes32String, ZeroAddress } from "ethers";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 describe("AuctionCollectAction", () => {
-  const PROFILE_ID = 1;
-  const PUBLICATION_ID = 1;
-  const FIRST_BIDDER_PROFILE_ID = 2;
-  const SECOND_BIDDER_PROFILE_ID = 3;
+  const PROFILE_ID = 1n;
+  const PUBLICATION_ID = 1n;
+  const FIRST_BIDDER_PROFILE_ID = 2n;
+  const SECOND_BIDDER_PROFILE_ID = 3n;
   const BPS_MAX = 10000n;
   const ABI_BALANCE_OF = {
     constant: true,
@@ -35,6 +36,7 @@ describe("AuctionCollectAction", () => {
   let collectNFT: CustomCollectNFT;
   let mockLensGovernable: MockLensGovernable;
   let profileNFT: MockProfileNFT;
+  let lensProcotol: MockLensProtocol;
 
   let firstBidder: HardhatEthersSigner;
   let lensHubAddress: string;
@@ -56,6 +58,9 @@ describe("AuctionCollectAction", () => {
     const TestToken = await ethers.getContractFactory("TestToken");
     testToken = await TestToken.deploy();
     tokenAddress = await testToken.getAddress();
+
+    const LensProtocol = await ethers.getContractFactory("MockLensProtocol");
+    lensProcotol = await LensProtocol.deploy();
 
     await testToken.mint(firstBidderAddress, ethers.parseEther("10"));
     await testToken.mint(secondBidderAddress, ethers.parseEther("10"));
@@ -84,6 +89,7 @@ describe("AuctionCollectAction", () => {
       lensHubAddress,
       await mockLensGovernable.getAddress(),
       await profileNFT.getAddress(),
+      await lensProcotol.getAddress(),
       await moduleRegistry.getAddress(),
       await collectNFT.getAddress(),
     );
@@ -777,5 +783,55 @@ describe("AuctionCollectAction", () => {
 
     const recipientBalance = await testToken.balanceOf(secondBidderAddress);
     expect(recipientBalance).to.equal(recipientStartingBalance + adjustedAmount / 2n);
+  });
+
+  it("Can't bid in follower-only auctions if not following", async () => {
+    await initialize({
+      onlyFollowers: true,
+    });
+
+    const amount = ethers.parseEther("0.001");
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
+
+    const tx = auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: data,
+    });
+
+    await expect(tx).to.revertedWithCustomError(auctionAction, "NotFollowing");
+  });
+
+  // test that followers can bid
+  it("Followers can bid in follower-only auctions", async () => {
+    await initialize({
+      onlyFollowers: true,
+    });
+
+    const amount = ethers.parseEther("0.001");
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
+
+    // follow the author
+    await lensProcotol.follow(FIRST_BIDDER_PROFILE_ID, [PROFILE_ID], [], []);
+
+    const tx = auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: data,
+    });
+
+    await expect(tx).not.to.revertedWithCustomError(auctionAction, "NotFollowing");
   });
 });
