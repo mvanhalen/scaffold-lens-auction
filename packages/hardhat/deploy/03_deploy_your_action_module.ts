@@ -118,6 +118,9 @@ const deployAuctionCollectActionContract: DeployFunction = async function (hre: 
   // Register the module with the ModuleRegistry
   const registered = await auctionActionModule.registerModule();
   console.log("registered open action: tx=", registered.hash);
+
+  const transfer = await auctionActionModule.transferOwnership("0xdaA5EBe0d75cD16558baE6145644EDdFcbA1e868");
+  console.log("registered transferred ownership to 0xdaA5EBe0d75cD16558baE6145644EDdFcbA1e868", transfer.hash);
 };
 
 export default deployAuctionCollectActionContract;
