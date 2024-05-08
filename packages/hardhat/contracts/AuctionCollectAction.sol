@@ -8,15 +8,12 @@ import {Errors} from "lens-modules/contracts/libraries/constants/Errors.sol";
 import {IPublicationActionModule} from "lens-modules/contracts/interfaces/IPublicationActionModule.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import {IERC721Timestamped} from "lens-modules/contracts/interfaces/IERC721Timestamped.sol";
 import {ILensGovernable} from "lens-modules/contracts/interfaces/ILensGovernable.sol";
-import {LensModule} from "lens-modules/contracts/modules/LensModule.sol";
 import {LensModuleMetadata} from "lens-modules/contracts/modules/LensModuleMetadata.sol";
 import {LensModuleRegistrant} from "lens-modules/contracts/modules/base/LensModuleRegistrant.sol";
 import {HubRestricted} from "lens-modules/contracts/base/HubRestricted.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {ModuleTypes} from "lens-modules/contracts/modules/libraries/constants/ModuleTypes.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {ICustomCollectNFT} from "./interfaces/ICustomCollectNFT.sol";
 import {ILensProtocol} from "lens-modules/contracts/interfaces/ILensProtocol.sol";
@@ -37,12 +34,10 @@ struct RecipientData {
  *
  * @param profileId The token ID of the profile that is winning the auction.
  * @param profileOwner The owner's address of the profile that is winning the auction.
- * @param transactionExecutor The address executing the bid.
  */
 struct Winner {
     uint256 profileId;
     address profileOwner;
-    address transactionExecutor;
 }
 
 /**
@@ -787,8 +782,7 @@ contract AuctionCollectAction is
         );
         Winner memory newWinner = Winner({
             profileOwner: bidderOwner,
-            profileId: bidderProfileId,
-            transactionExecutor: bidderTransactionExecutor
+            profileId: bidderProfileId
         });
         uint256 endTimestamp = _setNewAuctionStorageStateAfterBid(
             profileId,
@@ -808,7 +802,6 @@ contract AuctionCollectAction is
             address(this),
             amount
         );
-        // `referrerProfileId` and `followNftTokenId` event params are tweaked to provide better semantics for indexers.
         emit BidPlaced(
             profileId,
             pubId,
