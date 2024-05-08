@@ -280,7 +280,7 @@ describe("AuctionCollectAction", () => {
 
     // Ensure the bidder is now the winner
     const auctionData = await auctionAction.getAuctionData(PROFILE_ID, PUBLICATION_ID);
-    expect(auctionData.winner.profileOwner).to.equal(firstBidderAddress);
+    expect(auctionData.winnerProfileId).to.equal(FIRST_BIDDER_PROFILE_ID);
   });
 
   it("Valid higher bidder is winner", async () => {
@@ -331,7 +331,7 @@ describe("AuctionCollectAction", () => {
 
     // Ensure the bidder is now the winner
     const auctionData = await auctionAction.getAuctionData(PROFILE_ID, PUBLICATION_ID);
-    expect(auctionData.winner.profileOwner).to.equal(secondBidderAddress);
+    expect(auctionData.winnerProfileId).to.equal(SECOND_BIDDER_PROFILE_ID);
   });
 
   it("Bid less than current winner is insufficient", async () => {
@@ -485,7 +485,7 @@ describe("AuctionCollectAction", () => {
 
     // Ensure the bidder is now the winner
     const auctionData = await auctionAction.getAuctionData(PROFILE_ID, PUBLICATION_ID);
-    expect(auctionData.winner.profileOwner).to.equal(secondBidderAddress);
+    expect(auctionData.winnerProfileId).to.equal(SECOND_BIDDER_PROFILE_ID);
 
     const claimTxDone = auctionAction.claim(PROFILE_ID, PUBLICATION_ID);
     await expect(claimTxDone)
@@ -646,7 +646,7 @@ describe("AuctionCollectAction", () => {
 
     // Ensure the bidder is now the winner
     const auctionData = await auctionAction.getAuctionData(PROFILE_ID, PUBLICATION_ID);
-    expect(auctionData.winner.profileOwner).to.equal(firstBidderAddress);
+    expect(auctionData.winnerProfileId).to.equal(FIRST_BIDDER_PROFILE_ID);
   });
 
   it("Reserve price is not met", async () => {
