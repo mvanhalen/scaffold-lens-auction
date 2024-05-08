@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   137: {
     AuctionCollectAction: {
-      address: "0x100f9d81e1eE42B11b299867306Ad9Ed654Ef9CF",
+      address: "0x6511B9CE24E1198F4803e652B58ABB687484A6d0",
       abi: [
         {
           inputs: [
@@ -581,26 +581,9 @@ const deployedContracts = {
                   type: "address",
                 },
                 {
-                  components: [
-                    {
-                      internalType: "uint256",
-                      name: "profileId",
-                      type: "uint256",
-                    },
-                    {
-                      internalType: "address",
-                      name: "profileOwner",
-                      type: "address",
-                    },
-                    {
-                      internalType: "address",
-                      name: "transactionExecutor",
-                      type: "address",
-                    },
-                  ],
-                  internalType: "struct Winner",
-                  name: "winner",
-                  type: "tuple",
+                  internalType: "uint256",
+                  name: "winnerProfileId",
+                  type: "uint256",
                 },
                 {
                   internalType: "bool",
@@ -929,7 +912,7 @@ const deployedContracts = {
       },
     },
     CustomCollectNFT: {
-      address: "0x739BE081E9FB6Ca46f918092dd24Bed46992A705",
+      address: "0x6D84e5E92f1aBaF55037a960400b127ABb83eca4",
       abi: [
         {
           inputs: [
