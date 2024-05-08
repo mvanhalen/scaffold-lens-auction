@@ -3838,7 +3838,7 @@ const deployedContracts = {
   },
   80002: {
     AuctionCollectAction: {
-      address: "0x6CB9e58B5E807B27ee9Fc98bF05F5A03f35408f9",
+      address: "0xBA8670dB2EBa711fA588F0745bBaC8396aa51e7e",
       abi: [
         {
           inputs: [
@@ -4412,26 +4412,9 @@ const deployedContracts = {
                   type: "address",
                 },
                 {
-                  components: [
-                    {
-                      internalType: "uint256",
-                      name: "profileId",
-                      type: "uint256",
-                    },
-                    {
-                      internalType: "address",
-                      name: "profileOwner",
-                      type: "address",
-                    },
-                    {
-                      internalType: "address",
-                      name: "transactionExecutor",
-                      type: "address",
-                    },
-                  ],
-                  internalType: "struct Winner",
-                  name: "winner",
-                  type: "tuple",
+                  internalType: "uint256",
+                  name: "winnerProfileId",
+                  type: "uint256",
                 },
                 {
                   internalType: "bool",
@@ -4760,7 +4743,7 @@ const deployedContracts = {
       },
     },
     CustomCollectNFT: {
-      address: "0x1620d6fdf3e964b82E0Ab5Cb67f2b061EB7DB714",
+      address: "0x6511B9CE24E1198F4803e652B58ABB687484A6d0",
       abi: [
         {
           inputs: [
