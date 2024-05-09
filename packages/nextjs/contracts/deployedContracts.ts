@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   137: {
     AuctionCollectAction: {
-      address: "0x6511B9CE24E1198F4803e652B58ABB687484A6d0",
+      address: "0x516E3E57A3d1c9E2Db09Cd8eC0C54309b6cD1c00",
       abi: [
         {
           inputs: [
@@ -458,19 +458,6 @@ const deployedContracts = {
         },
         {
           inputs: [],
-          name: "COLLECT_NFT_IMPL",
-          outputs: [
-            {
-              internalType: "address",
-              name: "",
-              type: "address",
-            },
-          ],
-          stateMutability: "view",
-          type: "function",
-        },
-        {
-          inputs: [],
           name: "HUB",
           outputs: [
             {
@@ -645,6 +632,19 @@ const deployedContracts = {
             },
           ],
           name: "getCollectNFT",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "getCollectNftImpl",
           outputs: [
             {
               internalType: "address",
@@ -853,6 +853,19 @@ const deployedContracts = {
         {
           inputs: [
             {
+              internalType: "address",
+              name: "_collectNftImpl",
+              type: "address",
+            },
+          ],
+          name: "setCollectNftImpl",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
               internalType: "string",
               name: "_metadataURI",
               type: "string",
@@ -912,7 +925,7 @@ const deployedContracts = {
       },
     },
     CustomCollectNFT: {
-      address: "0x6D84e5E92f1aBaF55037a960400b127ABb83eca4",
+      address: "0xb8258d9a80C5eB360c625Fd7CA2d03B81d2A7DE0",
       abi: [
         {
           inputs: [
@@ -1024,6 +1037,38 @@ const deployedContracts = {
           anonymous: false,
           inputs: [
             {
+              indexed: false,
+              internalType: "string",
+              name: "uri",
+              type: "string",
+            },
+          ],
+          name: "ContractURIUpdated",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "previousOwner",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "newOwner",
+              type: "address",
+            },
+          ],
+          name: "OwnershipTransferred",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
               indexed: true,
               internalType: "address",
               name: "from",
@@ -1119,6 +1164,19 @@ const deployedContracts = {
           name: "burn",
           outputs: [],
           stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "contractURI",
+          outputs: [
+            {
+              internalType: "string",
+              name: "",
+              type: "string",
+            },
+          ],
+          stateMutability: "view",
           type: "function",
         },
         {
@@ -1318,6 +1376,19 @@ const deployedContracts = {
           type: "function",
         },
         {
+          inputs: [],
+          name: "owner",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
           inputs: [
             {
               internalType: "uint256",
@@ -1334,6 +1405,13 @@ const deployedContracts = {
             },
           ],
           stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "renounceOwnership",
+          outputs: [],
+          stateMutability: "nonpayable",
           type: "function",
         },
         {
@@ -1430,6 +1508,19 @@ const deployedContracts = {
             },
           ],
           name: "setApprovalForAll",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "string",
+              name: "uri",
+              type: "string",
+            },
+          ],
+          name: "setContractURI",
           outputs: [],
           stateMutability: "nonpayable",
           type: "function",
@@ -1565,6 +1656,19 @@ const deployedContracts = {
           stateMutability: "nonpayable",
           type: "function",
         },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "newOwner",
+              type: "address",
+            },
+          ],
+          name: "transferOwnership",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
       ],
       inheritedFunctions: {
         approve: "lens-modules/contracts/base/LensBaseERC721.sol",
@@ -1592,6 +1696,9 @@ const deployedContracts = {
         getSourcePublicationPointer: "contracts/interfaces/ICustomCollectNFT.sol",
         initialize: "contracts/interfaces/ICustomCollectNFT.sol",
         mint: "contracts/interfaces/ICustomCollectNFT.sol",
+        owner: "@openzeppelin/contracts/access/Ownable.sol",
+        renounceOwnership: "@openzeppelin/contracts/access/Ownable.sol",
+        transferOwnership: "@openzeppelin/contracts/access/Ownable.sol",
       },
     },
   },
@@ -3821,7 +3928,7 @@ const deployedContracts = {
   },
   80002: {
     AuctionCollectAction: {
-      address: "0x1b5c75D9f88ee61aB28FF3dCCF21076eaD668Ab2",
+      address: "0x78836cA30d0b4aBCb12796AD92c4FC6456bc47e3",
       abi: [
         {
           inputs: [
@@ -4739,7 +4846,7 @@ const deployedContracts = {
       },
     },
     CustomCollectNFT: {
-      address: "0x89F45f582eE0255f84B628D48DD979eDB8927c7B",
+      address: "0xde21669868248f30c2BD105d8417ae595BE5d38F",
       abi: [
         {
           inputs: [
@@ -4845,6 +4952,19 @@ const deployedContracts = {
             },
           ],
           name: "ApprovalForAll",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: false,
+              internalType: "string",
+              name: "uri",
+              type: "string",
+            },
+          ],
+          name: "ContractURIUpdated",
           type: "event",
         },
         {
@@ -4965,6 +5085,19 @@ const deployedContracts = {
           name: "burn",
           outputs: [],
           stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "contractURI",
+          outputs: [
+            {
+              internalType: "string",
+              name: "",
+              type: "string",
+            },
+          ],
+          stateMutability: "view",
           type: "function",
         },
         {
@@ -5296,6 +5429,19 @@ const deployedContracts = {
             },
           ],
           name: "setApprovalForAll",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "string",
+              name: "uri",
+              type: "string",
+            },
+          ],
+          name: "setContractURI",
           outputs: [],
           stateMutability: "nonpayable",
           type: "function",
