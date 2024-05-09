@@ -27,6 +27,8 @@ contract CustomCollectNFT is
 {
     using Strings for uint256;
 
+    event ContractURIUpdated(string uri);
+
     address public immutable HUB;
 
     uint256 internal _profileId;
@@ -36,6 +38,7 @@ contract CustomCollectNFT is
     bool private _initialized;
     string private _name;
     string private _symbol;
+    string private _contractURI;
 
     uint256 internal _royaltiesInBasisPoints;
 
@@ -93,6 +96,19 @@ contract CustomCollectNFT is
         uint256 tokenId
     ) public view override returns (string memory) {
         if (!_exists(tokenId)) revert Errors.TokenDoesNotExist();
+        return ILensHub(HUB).getContentURI(_profileId, _pubId);
+    }
+
+    function setContractURI(string memory uri) external onlyOwner {
+        _contractURI = uri;
+        emit ContractURIUpdated(uri);
+    }
+
+    function contractURI() public view returns (string memory) {
+        if (bytes(_contractURI).length > 0) {
+            return _contractURI;
+        }
+        // fallback to the token URI
         return ILensHub(HUB).getContentURI(_profileId, _pubId);
     }
 
