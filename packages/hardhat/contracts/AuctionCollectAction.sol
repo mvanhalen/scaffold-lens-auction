@@ -778,6 +778,15 @@ contract AuctionCollectAction is
             bidderProfileId,
             auction
         );
+        if (auction.winnerProfileId != 0) {
+            address winnerAddress = IERC721(PROFILE_NFT).ownerOf(
+                auction.winnerProfileId
+            );
+            IERC20(auction.currency).safeTransfer(
+                winnerAddress,
+                auction.winningBid
+            );
+        }
         IERC20(auction.currency).safeTransferFrom(
             bidderTransactionExecutor,
             address(this),

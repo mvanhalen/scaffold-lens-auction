@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   137: {
     AuctionCollectAction: {
-      address: "0x516E3E57A3d1c9E2Db09Cd8eC0C54309b6cD1c00",
+      address: "0x857b5e09d54AD26580297C02e4596537a2d3E329",
       abi: [
         {
           inputs: [
@@ -925,7 +925,7 @@ const deployedContracts = {
       },
     },
     CustomCollectNFT: {
-      address: "0xb8258d9a80C5eB360c625Fd7CA2d03B81d2A7DE0",
+      address: "0x7Bb025f8Aa14aD64EB81FaE9CAaC2A04ed1d1424",
       abi: [
         {
           inputs: [
@@ -3928,7 +3928,7 @@ const deployedContracts = {
   },
   80002: {
     AuctionCollectAction: {
-      address: "0x78836cA30d0b4aBCb12796AD92c4FC6456bc47e3",
+      address: "0xd935e230819AE963626B31f292623106A3dc3B19",
       abi: [
         {
           inputs: [
@@ -4846,7 +4846,7 @@ const deployedContracts = {
       },
     },
     CustomCollectNFT: {
-      address: "0xde21669868248f30c2BD105d8417ae595BE5d38F",
+      address: "0x57bCA94DD71A03Fb2A10Bb6aC64e151AA102ff62",
       abi: [
         {
           inputs: [

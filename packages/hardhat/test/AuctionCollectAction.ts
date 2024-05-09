@@ -816,6 +816,52 @@ describe("AuctionCollectAction", () => {
     expect(recipientBalance).to.equal(recipientStartingBalance + adjustedAmount / 2n);
   });
 
+  it("Old winner receives bid back when outbid", async () => {
+    await initialize();
+
+    const initialBalance = await testToken.balanceOf(firstBidderAddress);
+
+    const firstAmount = ethers.parseEther("0.001");
+    const firstData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [firstAmount]);
+
+    await auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: firstData,
+    });
+
+    const newBalance = await testToken.balanceOf(firstBidderAddress);
+    expect(newBalance).to.equal(initialBalance - firstAmount);
+
+    const secondAmount = ethers.parseEther("0.01");
+    const secondData = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [secondAmount]);
+
+    await auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: SECOND_BIDDER_PROFILE_ID,
+      actorProfileOwner: secondBidderAddress,
+      transactionExecutor: secondBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: secondData,
+    });
+
+    // Increase time to end the auction
+    await ethers.provider.send("evm_increaseTime", [60]);
+    await ethers.provider.send("evm_mine", []);
+
+    const endBalance = await testToken.balanceOf(firstBidderAddress);
+    expect(endBalance).to.equal(initialBalance);
+  });
+
   it("Can't bid in follower-only auctions if not following", async () => {
     await initialize({
       onlyFollowers: true,
