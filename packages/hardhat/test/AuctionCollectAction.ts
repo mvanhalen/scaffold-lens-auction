@@ -1,8 +1,7 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { artifacts, ethers } from "hardhat";
 import {
   AuctionCollectAction,
-  CustomCollectNFT,
   MockLensGovernable,
   MockLensProtocol,
   MockProfileNFT,
@@ -33,11 +32,11 @@ describe("AuctionCollectAction", () => {
   let auctionAction: AuctionCollectAction;
   let testToken: TestToken;
   let moduleRegistry: ModuleRegistry;
-  let collectNFT: CustomCollectNFT;
   let mockLensGovernable: MockLensGovernable;
   let profileNFT: MockProfileNFT;
   let lensProcotol: MockLensProtocol;
 
+  let lensHub: HardhatEthersSigner;
   let firstBidder: HardhatEthersSigner;
   let lensHubAddress: string;
   let authorAddress: string;
@@ -47,8 +46,9 @@ describe("AuctionCollectAction", () => {
   let treasuryFee: bigint;
 
   beforeEach(async () => {
-    const [lensHub, author, _firstBidder, secondBidder] = await ethers.getSigners();
+    const [_lensHub, author, _firstBidder, secondBidder] = await ethers.getSigners();
 
+    lensHub = _lensHub;
     firstBidder = _firstBidder;
     lensHubAddress = await lensHub.getAddress();
     authorAddress = await author.getAddress();
@@ -71,17 +71,20 @@ describe("AuctionCollectAction", () => {
 
     const ProfileNFT = await ethers.getContractFactory("MockProfileNFT");
     profileNFT = await ProfileNFT.deploy();
+    await profileNFT.mint(authorAddress, PROFILE_ID);
     await profileNFT.mint(firstBidderAddress, FIRST_BIDDER_PROFILE_ID);
     await profileNFT.mint(secondBidderAddress, SECOND_BIDDER_PROFILE_ID);
 
     // Deploy a new mock ModuleRegistry contract
     const ModuleRegistry = await ethers.getContractFactory("ModuleRegistry");
     moduleRegistry = await ModuleRegistry.deploy();
-
     await moduleRegistry.registerErc20Currency(await testToken.getAddress());
 
     const CollectNFT = await ethers.getContractFactory("CustomCollectNFT");
-    collectNFT = await CollectNFT.deploy(lensHubAddress, getNextContractAddress(lensHubAddress));
+    const collectNFT = await CollectNFT.deploy(
+      await profileNFT.getAddress(),
+      await getNextContractAddress(lensHubAddress),
+    );
 
     // Deploy a new TipActionModule contract for each test
     const AuctionCollectAction = await ethers.getContractFactory("AuctionCollectAction");
@@ -94,9 +97,10 @@ describe("AuctionCollectAction", () => {
       await collectNFT.getAddress(),
     );
 
+    const auctionAddress = await auctionAction.getAddress();
+
     // Set token allowance on the action module
     const firstBidderTokenInstance = testToken.connect(firstBidder);
-    const auctionAddress = await auctionAction.getAddress();
     await firstBidderTokenInstance.approve(auctionAddress, ethers.parseEther("10"));
 
     const secondBidderTokenInstance = testToken.connect(secondBidder);
@@ -436,6 +440,33 @@ describe("AuctionCollectAction", () => {
     expect(auctionData.feeProcessed).to.equal(true);
     expect(auctionData.winningBid).to.equal(amount);
     expect(auctionData.endTimestamp).not.to.equal(0);
+  });
+
+  it("Winner is Collect NFT contract owner after deployment", async () => {
+    await initialize();
+
+    const amount = ethers.parseEther("0.001");
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [amount]);
+
+    await auctionAction.processPublicationAction({
+      publicationActedProfileId: PROFILE_ID,
+      publicationActedId: PUBLICATION_ID,
+      actorProfileId: FIRST_BIDDER_PROFILE_ID,
+      actorProfileOwner: firstBidderAddress,
+      transactionExecutor: firstBidderAddress,
+      referrerProfileIds: [],
+      referrerPubIds: [],
+      referrerPubTypes: [],
+      actionModuleData: data,
+    });
+    await ethers.provider.send("evm_increaseTime", [60]);
+    await ethers.provider.send("evm_mine", []);
+    await auctionAction.claim(PROFILE_ID, PUBLICATION_ID);
+
+    const collectNFT = await auctionAction.getCollectNFT(PROFILE_ID, PUBLICATION_ID);
+    const contract = await artifacts.readArtifact("CustomCollectNFT");
+    const contractInstance = await ethers.getContractAt(contract.abi, collectNFT);
+    expect(await contractInstance.owner()).to.equal(authorAddress);
   });
 
   it("Winner cannot claim before auction ends", async () => {
@@ -808,7 +839,6 @@ describe("AuctionCollectAction", () => {
     await expect(tx).to.revertedWithCustomError(auctionAction, "NotFollowing");
   });
 
-  // test that followers can bid
   it("Followers can bid in follower-only auctions", async () => {
     await initialize({
       onlyFollowers: true,

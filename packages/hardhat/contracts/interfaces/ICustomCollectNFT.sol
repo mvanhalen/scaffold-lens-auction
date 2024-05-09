@@ -8,6 +8,10 @@ pragma solidity >=0.6.0;
  *
  * @notice This is the interface for the CollectNFT contract. Which is cloned upon the first collect for any given
  * publication.
+ *
+ * @author Paul Burke
+ *
+ * @notice Added token name, symbol, and royalty to the initialize interface.
  */
 interface ICustomCollectNFT {
     /**

@@ -10,6 +10,7 @@ import {LensBaseERC721} from "lens-modules/contracts/base/LensBaseERC721.sol";
 import {ActionRestricted} from "lens-modules/contracts/modules/ActionRestricted.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {ICustomCollectNFT} from "./interfaces/ICustomCollectNFT.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title CustomCollectNFT
@@ -21,7 +22,8 @@ contract CustomCollectNFT is
     LensBaseERC721,
     ERC2981CollectionRoyalties,
     ActionRestricted,
-    ICustomCollectNFT
+    ICustomCollectNFT,
+    Ownable
 {
     using Strings for uint256;
 
@@ -40,9 +42,10 @@ contract CustomCollectNFT is
     constructor(
         address hub,
         address actionModule
-    ) ActionRestricted(actionModule) {
+    ) Ownable() ActionRestricted(actionModule) {
         HUB = hub;
         _initialized = true;
+        _transferOwnership(actionModule);
     }
 
     /// @inheritdoc ICustomCollectNFT
@@ -60,6 +63,9 @@ contract CustomCollectNFT is
         _pubId = pubId;
         _name = tokenName;
         _symbol = tokenSymbol;
+        // Transfer ownership to the profile owner
+        address profileOwner = IERC721(HUB).ownerOf(profileId);
+        _transferOwnership(profileOwner);
     }
 
     /// @inheritdoc ICustomCollectNFT

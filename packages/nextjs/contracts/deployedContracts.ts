@@ -3821,7 +3821,7 @@ const deployedContracts = {
   },
   80002: {
     AuctionCollectAction: {
-      address: "0xBA8670dB2EBa711fA588F0745bBaC8396aa51e7e",
+      address: "0x1b5c75D9f88ee61aB28FF3dCCF21076eaD668Ab2",
       abi: [
         {
           inputs: [
@@ -4272,19 +4272,6 @@ const deployedContracts = {
         },
         {
           inputs: [],
-          name: "COLLECT_NFT_IMPL",
-          outputs: [
-            {
-              internalType: "address",
-              name: "",
-              type: "address",
-            },
-          ],
-          stateMutability: "view",
-          type: "function",
-        },
-        {
-          inputs: [],
           name: "HUB",
           outputs: [
             {
@@ -4459,6 +4446,19 @@ const deployedContracts = {
             },
           ],
           name: "getCollectNFT",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "getCollectNftImpl",
           outputs: [
             {
               internalType: "address",
@@ -4667,6 +4667,19 @@ const deployedContracts = {
         {
           inputs: [
             {
+              internalType: "address",
+              name: "_collectNftImpl",
+              type: "address",
+            },
+          ],
+          name: "setCollectNftImpl",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
               internalType: "string",
               name: "_metadataURI",
               type: "string",
@@ -4726,7 +4739,7 @@ const deployedContracts = {
       },
     },
     CustomCollectNFT: {
-      address: "0x6511B9CE24E1198F4803e652B58ABB687484A6d0",
+      address: "0x89F45f582eE0255f84B628D48DD979eDB8927c7B",
       abi: [
         {
           inputs: [
@@ -4832,6 +4845,25 @@ const deployedContracts = {
             },
           ],
           name: "ApprovalForAll",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "previousOwner",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "newOwner",
+              type: "address",
+            },
+          ],
+          name: "OwnershipTransferred",
           type: "event",
         },
         {
@@ -5132,6 +5164,19 @@ const deployedContracts = {
           type: "function",
         },
         {
+          inputs: [],
+          name: "owner",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
           inputs: [
             {
               internalType: "uint256",
@@ -5148,6 +5193,13 @@ const deployedContracts = {
             },
           ],
           stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "renounceOwnership",
+          outputs: [],
+          stateMutability: "nonpayable",
           type: "function",
         },
         {
@@ -5379,6 +5431,19 @@ const deployedContracts = {
           stateMutability: "nonpayable",
           type: "function",
         },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "newOwner",
+              type: "address",
+            },
+          ],
+          name: "transferOwnership",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
       ],
       inheritedFunctions: {
         approve: "lens-modules/contracts/base/LensBaseERC721.sol",
@@ -5406,6 +5471,9 @@ const deployedContracts = {
         getSourcePublicationPointer: "contracts/interfaces/ICustomCollectNFT.sol",
         initialize: "contracts/interfaces/ICustomCollectNFT.sol",
         mint: "contracts/interfaces/ICustomCollectNFT.sol",
+        owner: "@openzeppelin/contracts/access/Ownable.sol",
+        renounceOwnership: "@openzeppelin/contracts/access/Ownable.sol",
+        transferOwnership: "@openzeppelin/contracts/access/Ownable.sol",
       },
     },
   },

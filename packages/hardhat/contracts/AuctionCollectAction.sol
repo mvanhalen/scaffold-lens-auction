@@ -57,7 +57,7 @@ struct TokenData {
  * @param referralFee The percentage of the fee that will be transferred to the referrer in case of having one.
  * Measured in basis points, each basis point represents 0.01%.
  * @param currency The currency in which the bids are denominated.
- * @param winner The current auction winner.
+ * @param winnerProfileId The current auction winner's profile ID.
  * @param onlyFollowers Indicates whether followers are the only allowed to bid, and collect, or not.
  * @param collected Indicates whether the publication has been collected or not.
  * @param feeProcessed Indicates whether the auction fee was already processed or not.
@@ -209,10 +209,11 @@ contract AuctionCollectAction is
         uint256 timestamp
     );
 
-    address public immutable COLLECT_NFT_IMPL;
     address private immutable TREASURY;
     address private immutable PROFILE_NFT;
     address private immutable LENS_PROTOCOL;
+
+    address internal _collectNFTImpl;
 
     mapping(uint256 profileId => mapping(uint256 pubId => address collectNFT))
         internal _collectNFTByPub;
@@ -247,7 +248,15 @@ contract AuctionCollectAction is
         TREASURY = treasury;
         PROFILE_NFT = profileNFT;
         LENS_PROTOCOL = lensProtocol;
-        COLLECT_NFT_IMPL = collectNFTImpl;
+        _collectNFTImpl = collectNFTImpl;
+    }
+
+    function getCollectNftImpl() external view returns (address) {
+        return _collectNFTImpl;
+    }
+
+    function setCollectNftImpl(address _collectNftImpl) external onlyOwner {
+        _collectNFTImpl = _collectNftImpl;
     }
 
     function supportsInterface(
@@ -411,10 +420,9 @@ contract AuctionCollectAction is
 
     function _deployCollectNFT(
         uint256 profileId,
-        uint256 pubId,
-        address collectNFTImpl
+        uint256 pubId
     ) private returns (address) {
-        address collectNFT = Clones.clone(collectNFTImpl);
+        address collectNFT = Clones.clone(_collectNFTImpl);
         AuctionData storage auction = _auctionDataByPubByProfile[profileId][
             pubId
         ];
@@ -433,8 +441,7 @@ contract AuctionCollectAction is
 
     function _getOrDeployCollectNFT(
         uint256 publicationCollectedProfileId,
-        uint256 publicationCollectedId,
-        address collectNFTImpl
+        uint256 publicationCollectedId
     ) private returns (address) {
         address collectNFT = _collectNFTByPub[publicationCollectedProfileId][
             publicationCollectedId
@@ -442,8 +449,7 @@ contract AuctionCollectAction is
         if (collectNFT == address(0)) {
             collectNFT = _deployCollectNFT(
                 publicationCollectedProfileId,
-                publicationCollectedId,
-                collectNFTImpl
+                publicationCollectedId
             );
             _collectNFTByPub[publicationCollectedProfileId][
                 publicationCollectedId
@@ -502,8 +508,7 @@ contract AuctionCollectAction is
 
         address collectNFT = _getOrDeployCollectNFT({
             publicationCollectedProfileId: collectedProfileId,
-            publicationCollectedId: collectedPubId,
-            collectNFTImpl: COLLECT_NFT_IMPL
+            publicationCollectedId: collectedPubId
         });
 
         uint256 tokenId = ICustomCollectNFT(collectNFT).mint(winnerAddress);
